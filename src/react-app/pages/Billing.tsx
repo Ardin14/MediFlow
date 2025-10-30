@@ -1,24 +1,23 @@
 import { useState, useEffect } from "react";
 import Layout from "@/react-app/components/Layout";
 import { Plus, DollarSign, Check, Clock } from "lucide-react";
+import { apiFetch } from "@/react-app/lib/api";
 
 export default function Billing() {
   const [clinicUser, setClinicUser] = useState<any>(null);
-  const [invoices, setInvoices] = useState([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const userResponse = await fetch("/api/users/me");
-        const userData = await userResponse.json();
+        const userData = await apiFetch<any>("/api/users/me");
         setClinicUser(userData.clinicUser);
 
-        const invoicesResponse = await fetch("/api/invoices");
-        const invoicesData = await invoicesResponse.json();
-        setInvoices(invoicesData);
+        const invoicesData = await apiFetch<any[]>("/api/invoices");
+        setInvoices(invoicesData || []);
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching invoices:", error);
       } finally {
         setLoading(false);
       }

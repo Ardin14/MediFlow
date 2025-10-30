@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router";
 import Layout from "@/react-app/components/Layout";
 import { FileText, Pill, Save } from "lucide-react";
+import { apiFetch } from "@/react-app/lib/api";
 
 export default function Consultation() {
   const { appointmentId } = useParams();
@@ -11,8 +12,7 @@ export default function Consultation() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const userResponse = await fetch("/api/users/me");
-        const userData = await userResponse.json();
+        const userData = await apiFetch<any>("/api/users/me");
         setClinicUser(userData.clinicUser);
       } catch (error) {
         console.error("Error fetching data:", error);

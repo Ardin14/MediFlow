@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors";
+// custom CORS handling (avoid permissive "*" in production)
 import {
   exchangeCodeForSessionToken,
   getOAuthRedirectUrl,
@@ -20,26 +20,116 @@ import {
   CreateClinicUserSchema
 } from "@/shared/types";
 
-interface WorkerEnv {
-  DB: D1Database;
-  MOCHA_USERS_SERVICE_API_URL: string;
-  MOCHA_USERS_SERVICE_API_KEY: string;
-}
+// Worker environment bindings (documented here for reference)
+// Expected bindings:
+// - DB: D1Database
+// - MOCHA_USERS_SERVICE_API_URL: string
+// - MOCHA_USERS_SERVICE_API_KEY: string
+// - ALLOWED_ORIGIN?: string (comma-separated allowlist)
 
-const app = new Hono<{ 
-  Bindings: WorkerEnv; 
-  Variables: { 
-    user?: import("@getmocha/users-service/shared").MochaUser;
-    clinicUser?: any;
-  } 
-}>();
+const app = new Hono();
 
-app.use("/*", cors({
-  origin: "*",
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-}));
+// Safer CORS middleware: respects ALLOWED_ORIGIN binding when set, otherwise echoes request origin.
+// This enables cookies (credentials) while avoiding a blanket '*' in production.
+// Rate limiting map (in-memory). Note: Workers are stateless — this provides a basic guard but is not bulletproof.
+const rateLimitMap = new Map<string, { count: number; windowStart: number }>();
+const RATE_LIMIT_MAX = 120; // max requests
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // per minute
+
+// Optional: if a KV namespace binding named RATE_LIMIT_KV exists, prefer KV-backed rate limiting
+// KV must support get/put with JSON string values. This reduces per-instance false negatives.
+const useKVRateLimit = async (c: any, ip: string): Promise<boolean> => {
+  try {
+    const kv = (c.env && c.env.RATE_LIMIT_KV) ? c.env.RATE_LIMIT_KV : null;
+    if (!kv) return false; // KV not configured
+
+    const key = `rl:${ip}`;
+    const raw = await kv.get(key);
+    const now = Date.now();
+    if (!raw) {
+      await kv.put(key, JSON.stringify({ count: 1, windowStart: now }), { expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000) });
+      return false;
+    }
+
+    const entry = JSON.parse(raw as string);
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+      await kv.put(key, JSON.stringify({ count: 1, windowStart: now }), { expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000) });
+      return false;
+    }
+
+    entry.count += 1;
+    if (entry.count > RATE_LIMIT_MAX) {
+      // update kv to reflect continued rate-limited state
+      await kv.put(key, JSON.stringify(entry), { expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000) });
+      return true; // rate-limited
+    }
+
+    await kv.put(key, JSON.stringify(entry), { expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000) });
+    return false;
+  } catch (err) {
+    // if KV fails, fallback to in-memory approach
+    return false;
+  }
+};
+
+// Simple logger helper
+const logError = (msg: string, err?: any) => {
+  // use globalThis.console to avoid TS lib issues in some environments
+  (globalThis as any).console?.error?.(`[MediFlow Worker] ${msg}`, err || "");
+};
+
+// Enhanced CORS + rate-limit middleware
+app.use("/*", async (c: any, next: any) => {
+  try {
+    // Rate limiting per IP. Prefer KV-backed if available to reduce per-instance variability.
+    const ip = c.req.headers.get('CF-Connecting-IP') || c.req.headers.get('x-forwarded-for') || 'unknown';
+    const kvLimited = await useKVRateLimit(c, ip);
+    if (kvLimited) {
+      return c.json({ error: 'Rate limit exceeded' }, 429);
+    }
+
+    // Fallback in-memory
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (!entry) {
+      rateLimitMap.set(ip, { count: 1, windowStart: now });
+    } else {
+      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+        // reset window
+        rateLimitMap.set(ip, { count: 1, windowStart: now });
+      } else {
+        entry.count += 1;
+        if (entry.count > RATE_LIMIT_MAX) {
+          // Too many requests
+          return c.json({ error: 'Rate limit exceeded' }, 429);
+        }
+        rateLimitMap.set(ip, entry);
+      }
+    }
+
+    // CORS handling
+    const origin = c.req.headers.get("Origin") || "";
+    const allowedRaw = c.env.ALLOWED_ORIGIN || "";
+  const allowedList = allowedRaw.split(",").map((s: string) => s.trim()).filter(Boolean);
+
+    const shouldAllow = allowedList.length > 0 ? allowedList.includes(origin) : !!origin;
+    if (shouldAllow && origin) {
+      c.header("Access-Control-Allow-Origin", origin);
+      c.header("Access-Control-Allow-Credentials", "true");
+      c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      c.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    }
+
+    if (c.req.method === "OPTIONS") {
+      return c.text("", 204);
+    }
+
+    await next();
+  } catch (err) {
+    logError('Middleware failure', err);
+    return c.json({ error: 'Server error' }, 500);
+  }
+});
 
 // Helper middleware to get clinic user info
 const clinicUserMiddleware = async (c: any, next: any) => {
@@ -72,7 +162,7 @@ const requireRole = (allowedRoles: UserRole[]) => {
 };
 
 // Authentication endpoints
-app.get('/api/oauth/google/redirect_url', async (c) => {
+app.get('/api/oauth/google/redirect_url', async (c: any) => {
   const redirectUrl = await getOAuthRedirectUrl('google', {
     apiUrl: c.env.MOCHA_USERS_SERVICE_API_URL,
     apiKey: c.env.MOCHA_USERS_SERVICE_API_KEY,
@@ -81,7 +171,7 @@ app.get('/api/oauth/google/redirect_url', async (c) => {
   return c.json({ redirectUrl }, 200);
 });
 
-app.post("/api/sessions", async (c) => {
+app.post("/api/sessions", async (c: any) => {
   const body = await c.req.json();
 
   if (!body.code) {
@@ -104,7 +194,7 @@ app.post("/api/sessions", async (c) => {
   return c.json({ success: true }, 200);
 });
 
-app.get("/api/users/me", authMiddleware, async (c) => {
+app.get("/api/users/me", authMiddleware, async (c: any) => {
   const user = c.get("user");
   
   // Get clinic user info if exists
@@ -118,7 +208,7 @@ app.get("/api/users/me", authMiddleware, async (c) => {
   });
 });
 
-app.get('/api/logout', async (c) => {
+app.get('/api/logout', async (c: any) => {
   const sessionToken = getCookie(c, MOCHA_SESSION_TOKEN_COOKIE_NAME);
 
   if (typeof sessionToken === 'string') {
@@ -140,7 +230,7 @@ app.get('/api/logout', async (c) => {
 });
 
 // Get available clinics for registration
-app.get("/api/clinics", authMiddleware, async (c) => {
+app.get("/api/clinics", authMiddleware, async (c: any) => {
   const { results } = await c.env.DB.prepare(
     "SELECT id, name, address, phone, email FROM clinics ORDER BY name"
   ).all();
@@ -149,7 +239,7 @@ app.get("/api/clinics", authMiddleware, async (c) => {
 });
 
 // Clinic user registration/management
-app.post("/api/clinic-users", authMiddleware, async (c) => {
+app.post("/api/clinic-users", authMiddleware, async (c: any) => {
   const user = c.get("user");
   const body = await c.req.json();
 
@@ -196,7 +286,7 @@ app.post("/api/clinic-users", authMiddleware, async (c) => {
 });
 
 // Patients endpoints - now clinic-scoped
-app.get("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'doctor']), async (c) => {
+app.get("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'doctor']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   const { results } = await c.env.DB.prepare(
@@ -206,7 +296,7 @@ app.get("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['adm
   return c.json(results);
 });
 
-app.post("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c) => {
+app.post("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreatePatientSchema.parse(body);
@@ -233,7 +323,7 @@ app.post("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['ad
 });
 
 // Appointments endpoints - now clinic-scoped
-app.get("/api/appointments", authMiddleware, clinicUserMiddleware, async (c) => {
+app.get("/api/appointments", authMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   let query = `
     SELECT a.*, p.full_name as patient_name, cu.full_name as doctor_name 
@@ -256,7 +346,7 @@ app.get("/api/appointments", authMiddleware, clinicUserMiddleware, async (c) => 
   return c.json(results);
 });
 
-app.post("/api/appointments", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c) => {
+app.post("/api/appointments", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreateAppointmentSchema.parse(body);
@@ -297,7 +387,7 @@ app.post("/api/appointments", authMiddleware, clinicUserMiddleware, requireRole(
   return c.json({ success: true }, 201);
 });
 
-app.put("/api/appointments/:id/status", authMiddleware, clinicUserMiddleware, async (c) => {
+app.put("/api/appointments/:id/status", authMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const appointmentId = c.req.param("id");
   const body = await c.req.json();
@@ -324,7 +414,7 @@ app.put("/api/appointments/:id/status", authMiddleware, clinicUserMiddleware, as
 });
 
 // Visits endpoints - now clinic-scoped
-app.post("/api/visits", authMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c) => {
+app.post("/api/visits", authMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreateVisitSchema.parse(body);
@@ -362,7 +452,7 @@ app.post("/api/visits", authMiddleware, clinicUserMiddleware, requireRole(['doct
 });
 
 // Prescriptions endpoints - now clinic-scoped
-app.post("/api/prescriptions", authMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c) => {
+app.post("/api/prescriptions", authMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreatePrescriptionSchema.parse(body);
@@ -395,7 +485,7 @@ app.post("/api/prescriptions", authMiddleware, clinicUserMiddleware, requireRole
 });
 
 // Invoices endpoints - now clinic-scoped
-app.get("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c) => {
+app.get("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   const { results } = await c.env.DB.prepare(`
@@ -409,7 +499,7 @@ app.get("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['adm
   return c.json(results);
 });
 
-app.post("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c) => {
+app.post("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreateInvoiceSchema.parse(body);
@@ -440,7 +530,7 @@ app.post("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['ad
   return c.json({ success: true }, 201);
 });
 
-app.put("/api/invoices/:id/status", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c) => {
+app.put("/api/invoices/:id/status", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const invoiceId = c.req.param("id");
   const body = await c.req.json();
@@ -467,7 +557,7 @@ app.put("/api/invoices/:id/status", authMiddleware, clinicUserMiddleware, requir
 });
 
 // Get clinic users by role (for scheduling appointments) - now clinic-scoped
-app.get("/api/clinic-users/doctors", authMiddleware, clinicUserMiddleware, async (c) => {
+app.get("/api/clinic-users/doctors", authMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   const { results } = await c.env.DB.prepare(
@@ -478,7 +568,7 @@ app.get("/api/clinic-users/doctors", authMiddleware, clinicUserMiddleware, async
 });
 
 // Dashboard stats endpoint - now clinic-scoped
-app.get("/api/dashboard/stats", authMiddleware, clinicUserMiddleware, async (c) => {
+app.get("/api/dashboard/stats", authMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   // Get total patients for this clinic

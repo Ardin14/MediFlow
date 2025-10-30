@@ -2,24 +2,23 @@ import { useState, useEffect } from "react";
 import Layout from "@/react-app/components/Layout";
 import ScheduleAppointmentModal from "@/react-app/components/ScheduleAppointmentModal";
 import { Plus, Calendar, Clock, User } from "lucide-react";
+import { apiFetch } from "@/react-app/lib/api";
 
 export default function Appointments() {
   const [clinicUser, setClinicUser] = useState<any>(null);
-  const [appointments, setAppointments] = useState([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   const fetchData = async () => {
     try {
-      const userResponse = await fetch("/api/users/me");
-      const userData = await userResponse.json();
+      const userData = await apiFetch<any>("/api/users/me");
       setClinicUser(userData.clinicUser);
 
-      const appointmentsResponse = await fetch("/api/appointments");
-      const appointmentsData = await appointmentsResponse.json();
-      setAppointments(appointmentsData);
+      const appointmentsData = await apiFetch<any[]>("/api/appointments");
+      setAppointments(appointmentsData || []);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching appointments:", error);
     } finally {
       setLoading(false);
     }

@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import Layout from "@/react-app/components/Layout";
 import AddPatientModal from "@/react-app/components/AddPatientModal";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { apiFetch } from "@/react-app/lib/api";
 
 export default function Patients() {
   const [clinicUser, setClinicUser] = useState<any>(null);
-  const [patients, setPatients] = useState([]);
+  const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -13,13 +14,11 @@ export default function Patients() {
 
   const fetchData = async () => {
     try {
-      const userResponse = await fetch("/api/users/me");
-      const userData = await userResponse.json();
+      const userData = await apiFetch<any>("/api/users/me");
       setClinicUser(userData.clinicUser);
 
-      const patientsResponse = await fetch("/api/patients");
-      const patientsData = await patientsResponse.json();
-      setPatients(patientsData);
+      const patientsData = await apiFetch<any[]>("/api/patients");
+      setPatients(patientsData || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {

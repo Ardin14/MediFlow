@@ -1,0 +1,19 @@
+name = "mediflow-worker"
+main = "./src/worker/index.ts"
+compatibility_date = "2025-06-17"
+
+# Example bindings — set these in your wrangler.toml or in Cloudflare dashboard
+[vars]
+ALLOWED_ORIGIN = "https://app.example.com"
+
+# KV binding example (optional):
+# Add a KV namespace in your account and bind it as RATE_LIMIT_KV
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "your-kv-id"
+
+[d1_databases]
+[[d1_databases]]
+binding = "DB"
+# database_name = "your-db-name"
+# database_id = "your-db-id"
