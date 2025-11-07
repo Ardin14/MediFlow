@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import Layout from "@/react-app/components/Layout";
 import AddPatientModal from "@/react-app/components/AddPatientModal";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import TransferPatientsModal from "@/react-app/components/TransferPatientsModal";
+import { Plus, Search, Edit, Trash2, Move } from "lucide-react";
 import { apiFetch } from "@/react-app/lib/api";
 
 export default function Patients() {
@@ -10,7 +11,8 @@ export default function Patients() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
-  
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedPatients, setSelectedPatients] = useState<number[]>([]);
 
   const fetchData = async () => {
     try {
@@ -35,6 +37,35 @@ export default function Patients() {
     fetchData();
   };
 
+  const handleTransferComplete = () => {
+    // Refresh the patients list and clear selection
+    fetchData();
+    setSelectedPatients([]);
+  };
+
+  const filteredPatients = patients.filter(
+    (patient) =>
+      patient.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const togglePatientSelection = (patientId: number) => {
+    setSelectedPatients((prev) =>
+      prev.includes(patientId)
+        ? prev.filter((id) => id !== patientId)
+        : [...prev, patientId]
+    );
+  };
+
+  const toggleAllPatients = () => {
+    if (selectedPatients.length === filteredPatients.length) {
+      setSelectedPatients([]);
+    } else {
+      setSelectedPatients(filteredPatients.map((p) => p.id));
+    }
+  };
+
   if (loading) {
     return (
       <Layout clinicUser={clinicUser}>
@@ -49,16 +80,36 @@ export default function Patients() {
     <Layout clinicUser={clinicUser}>
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Patients</h1>
-          {(clinicUser?.role === "admin" || clinicUser?.role === "receptionist") && (
-            <button 
-              onClick={() => setShowAddModal(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Patient
-            </button>
-          )}
+          <div className="flex items-center space-x-4">
+            <h1 className="text-2xl font-bold text-gray-900">Patients</h1>
+            {selectedPatients.length > 0 && (
+              <span className="text-sm text-gray-500">
+                {selectedPatients.length} selected
+              </span>
+            )}
+          </div>
+
+          <div className="flex space-x-3">
+            {selectedPatients.length > 0 && (
+              <button
+                onClick={() => setShowTransferModal(true)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center"
+              >
+                <Move className="w-4 h-4 mr-2" />
+                Transfer Selected
+              </button>
+            )}
+            {(clinicUser?.role === "admin" ||
+              clinicUser?.role === "receptionist") && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Patient
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -79,6 +130,19 @@ export default function Patients() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        checked={
+                          filteredPatients.length > 0 &&
+                          selectedPatients.length === filteredPatients.length
+                        }
+                        onChange={toggleAllPatients}
+                      />
+                    </div>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Name
                   </th>
@@ -97,11 +161,21 @@ export default function Patients() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {patients.map((patient: any) => (
+                {filteredPatients.map((patient: any) => (
                   <tr key={patient.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        checked={selectedPatients.includes(patient.id)}
+                        onChange={() => togglePatientSelection(patient.id)}
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="font-medium text-gray-900">{patient.full_name}</div>
+                        <div className="font-medium text-gray-900">
+                          {patient.full_name}
+                        </div>
                         {patient.user_id && (
                           <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                             Registered
@@ -140,7 +214,18 @@ export default function Patients() {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onPatientAdded={handlePatientAdded}
+          clinicId={clinicUser?.clinic_id}
         />
+
+        {showTransferModal && (
+          <TransferPatientsModal
+            isOpen={showTransferModal}
+            onClose={() => setShowTransferModal(false)}
+            patientIds={selectedPatients}
+            currentClinicId={clinicUser?.clinic_id}
+            onTransferComplete={handleTransferComplete}
+          />
+        )}
       </div>
     </Layout>
   );

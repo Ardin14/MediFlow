@@ -22,12 +22,23 @@ import {
 
 // Worker environment bindings (documented here for reference)
 // Expected bindings:
-// - DB: D1Database
+// - SUPABASE_URL: string
+// - SUPABASE_SERVICE_ROLE_KEY: string
 // - MOCHA_USERS_SERVICE_API_URL: string
 // - MOCHA_USERS_SERVICE_API_KEY: string
 // - ALLOWED_ORIGIN?: string (comma-separated allowlist)
 
+import { createSupabaseClient } from './db/supabase';
+import { DataAccessLayer } from './db/dal';
+
 const app = new Hono();
+
+app.use('*', async (c: any, next: any) => {
+  const supabase = createSupabaseClient(c.env);
+  const db = new DataAccessLayer(supabase as any);
+  c.set('db', db);
+  await next();
+});
 
 // Safer CORS middleware: respects ALLOWED_ORIGIN binding when set, otherwise echoes request origin.
 // This enables cookies (credentials) while avoiding a blanket '*' in production.
@@ -163,12 +174,26 @@ const requireRole = (allowedRoles: UserRole[]) => {
 
 // Authentication endpoints
 app.get('/api/oauth/google/redirect_url', async (c: any) => {
-  const redirectUrl = await getOAuthRedirectUrl('google', {
-    apiUrl: c.env.MOCHA_USERS_SERVICE_API_URL,
-    apiKey: c.env.MOCHA_USERS_SERVICE_API_KEY,
-  });
+  try {
+    const apiUrl = c.env.MOCHA_USERS_SERVICE_API_URL;
+    const apiKey = c.env.MOCHA_USERS_SERVICE_API_KEY;
 
-  return c.json({ redirectUrl }, 200);
+    if (!apiUrl || !apiKey) {
+      // Misconfiguration — return helpful error
+      logError('Missing MOCHA_USERS_SERVICE_API_URL or API_KEY');
+      return c.json({ error: 'Server misconfiguration: authentication service not configured' }, 500);
+    }
+
+    const redirectUrl = await getOAuthRedirectUrl('google', {
+      apiUrl,
+      apiKey,
+    });
+
+    return c.json({ redirectUrl }, 200);
+  } catch (err) {
+    logError('Failed to get OAuth redirect URL', err);
+    return c.json({ error: 'Failed to get login redirect URL' }, 500);
+  }
 });
 
 app.post("/api/sessions", async (c: any) => {

@@ -1,50 +1,55 @@
-import { useAuth } from "@getmocha/users-service/react";
-import { useEffect, useState } from "react";
-import { Navigate } from "react-router";
+import { Session } from '@supabase/supabase-js';
+import { Navigate } from 'react-router-dom';
 import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { supabase } from '../lib/supabaseClient';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  session: Session | null;
 }
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isPending } = useAuth();
+export default function ProtectedRoute({ children, session }: ProtectedRouteProps) {
   const [clinicUser, setClinicUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const checkClinicUser = async () => {
-      if (user) {
+      if (session?.user) {
         try {
-          const response = await fetch("/api/users/me");
-          const data = await response.json();
-          setClinicUser(data.clinicUser);
+          const { data, error } = await supabase
+            .from('clinic_users')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+
+          // maybeSingle() returns `null` for zero rows instead of throwing.
+          if (error) throw error;
+          setClinicUser(data ?? null);
         } catch (error) {
-          console.error("Error fetching clinic user:", error);
+          console.error('Error fetching clinic user:', error);
         }
       }
       setIsLoading(false);
     };
 
-    if (!isPending) {
-      checkClinicUser();
-    }
-  }, [user, isPending]);
+    checkClinicUser();
+  }, [session]);
 
-  if (isPending || isLoading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="h-screen w-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
-  if (!user) {
+  if (!session) {
     return <Navigate to="/" replace />;
   }
 
   if (!clinicUser) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/setup" replace />;
   }
 
   return <>{children}</>;
