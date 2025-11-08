@@ -10,13 +10,24 @@ import { mochaPlugins } from "@getmocha/vite-plugins";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const g: any = globalThis as any;
 if (typeof g.File === "undefined") {
-  class NodeFile extends Blob {
+  // Minimal File shim without DOM type dependencies
+  class NodeFile {
     name: string;
     lastModified: number;
-    constructor(bits: BlobPart[], name: string, options: FilePropertyBag = {}) {
-      super(bits, options);
+    size: number;
+    type: string;
+    private _parts: any[];
+    constructor(bits: any[], name: string, options: any = {}) {
+      this._parts = bits || [];
       this.name = String(name);
-      this.lastModified = options.lastModified ?? Date.now();
+      this.lastModified = options?.lastModified ?? Date.now();
+      this.type = options?.type ?? "";
+      // Approximate size; good enough for config-time checks
+      this.size = this._parts.reduce((n, part) => {
+        if (typeof part === 'string') return n + Buffer.byteLength(part);
+        if (part && typeof part === 'object' && typeof part.size === 'number') return n + part.size;
+        return n;
+      }, 0);
     }
   }
   g.File = NodeFile as unknown as typeof File;
