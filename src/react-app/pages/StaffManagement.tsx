@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '@/react-app/components/Layout';
 import { supabase } from '../lib/supabaseClient';
-import { Plus, Mail, AlertTriangle } from 'lucide-react';
+import { Plus, Mail, AlertTriangle, CheckCircle } from 'lucide-react';
 import { generateSecurePassword } from '../utils/password';
 
 interface StaffMember {
@@ -252,6 +252,19 @@ export default function StaffManagement() {
     }
   };
 
+  const approveStaff = async (staffMember: StaffMember) => {
+    try {
+      await supabase
+        .from('clinic_users')
+        .update({ status: 'active' })
+        .eq('id', staffMember.id);
+
+      fetchData();
+    } catch (error) {
+      console.error('Error approving staff member:', error);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -331,12 +344,23 @@ export default function StaffManagement() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex space-x-3">
                         {member.status === 'pending' && (
-                          <button
-                            onClick={() => resendInvite(member)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            <Mail className="w-4 h-4" />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => approveStaff(member)}
+                              className="text-green-600 hover:text-green-900 flex items-center gap-1"
+                              title="Approve"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => resendInvite(member)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Resend invite"
+                            >
+                              <Mail className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => toggleStatus(member)}

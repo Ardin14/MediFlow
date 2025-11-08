@@ -1,7 +1,7 @@
 import z from "zod";
 
 // User role enum
-export const UserRoleSchema = z.enum(['admin', 'receptionist', 'doctor', 'patient']);
+export const UserRoleSchema = z.enum(['admin', 'receptionist', 'doctor', 'nurse', 'patient']);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 
 // Appointment status enum
@@ -32,6 +32,7 @@ export const ClinicUserSchema = z.object({
   role: UserRoleSchema,
   full_name: z.string().nullable(),
   phone: z.string().nullable(),
+  status: z.enum(['pending', 'active', 'inactive']).optional().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });

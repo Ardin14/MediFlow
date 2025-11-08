@@ -100,8 +100,41 @@ export default function Home() {
     );
   }
 
-  if (user && clinicUser) {
+  if (user && clinicUser && (!clinicUser.status || clinicUser.status === 'active')) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (user && clinicUser && clinicUser.status && clinicUser.status !== 'active') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Clock className="w-8 h-8 text-yellow-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900">Pending Approval</h2>
+          <p className="text-gray-600 mt-2">
+            Your account is awaiting approval from the clinic admin. You will receive access once approved.
+          </p>
+          <div className="mt-6 text-sm text-gray-500">
+            Status: <span className="font-medium capitalize">{clinicUser.status}</span>
+          </div>
+          <div className="mt-8 flex gap-3 justify-center">
+            <button
+              onClick={() => redirectToLogin?.()}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            >
+              Switch account
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (user && showRegistration) {
@@ -132,7 +165,8 @@ export default function Home() {
                 {clinics.map((clinic) => (
                   <option key={clinic.id} value={clinic.id}>
                     {clinic.name}
-                    {clinic.address && ` - ${clinic.address}`}
+                    {clinic.address ? ` - ${clinic.address}` : ''}
+                    {clinic.phone ? ` (${clinic.phone})` : ''}
                   </option>
                 ))}
               </select>
@@ -149,6 +183,7 @@ export default function Home() {
               >
                 <option value="patient">Patient</option>
                 <option value="doctor">Doctor</option>
+                <option value="nurse">Nurse</option>
                 <option value="receptionist">Receptionist</option>
                 <option value="admin">Admin</option>
               </select>

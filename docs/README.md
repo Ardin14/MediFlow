@@ -131,7 +131,23 @@ MediFlow is a comprehensive web-based clinic management system designed to strea
 
 ---
 
-### 4. Patient
+### 4. Nurse
+**Clinical support and patient care assistance**
+
+**Permissions:**
+- Register and manage patients
+- View patients in their clinic
+- Update vitals and basic medical information
+- View clinic appointments
+- Schedule appointments
+
+**Restrictions:**
+- Cannot create prescriptions
+- Cannot access billing
+
+---
+
+### 5. Patient
 **Limited view for patient portal access**
 
 **Permissions:**

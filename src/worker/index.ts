@@ -165,7 +165,7 @@ app.post("/api/clinic-users", supabaseAuthMiddleware, async (c: any) => {
   const user = c.get("user");
   const body = await c.req.json();
 
-  // Check if user already exists in clinic system
+  // Check if user already exists in clinic system (D1 mirror)
   const { results: existingUser } = await c.env.DB.prepare(
     "SELECT * FROM clinic_users WHERE user_id = ?"
   ).bind(user!.id).all();
@@ -177,16 +177,36 @@ app.post("/api/clinic-users", supabaseAuthMiddleware, async (c: any) => {
   const validatedData = CreateClinicUserSchema.parse(body);
   const fullName = validatedData.full_name || user!.google_user_data.name || '';
 
-  // Insert into clinic_users table
+  // 1) Insert authoritative record in Supabase with status 'pending' (requires SERVICE ROLE)
+  try {
+    const su = createSupabaseClient(c.env as any);
+    const { error: suErr } = await su
+      .from('clinic_users')
+      .insert({
+        user_id: user!.id,
+        clinic_id: validatedData.clinic_id,
+        role: validatedData.role,
+        full_name: fullName,
+        phone: validatedData.phone || null,
+        status: 'pending'
+      } as any);
+    if (suErr) {
+      return c.json({ error: `Failed to register user in Supabase: ${suErr.message}` }, 500);
+    }
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to register user in Supabase' }, 500);
+  }
+
+  // 2) Mirror to D1 (no status column in mirror)
   const { success: clinicUserSuccess } = await c.env.DB.prepare(
     "INSERT INTO clinic_users (user_id, clinic_id, role, full_name, phone) VALUES (?, ?, ?, ?, ?)"
   ).bind(user!.id, validatedData.clinic_id, validatedData.role, fullName, validatedData.phone || null).run();
 
   if (!clinicUserSuccess) {
-    return c.json({ error: "Failed to register user" }, 500);
+    return c.json({ error: "Failed to register user (mirror)" }, 500);
   }
 
-  // If the role is patient, also create a patient record
+  // 3) If role is patient, create patient record in D1 mirror
   if (validatedData.role === 'patient') {
     const { success: patientSuccess } = await c.env.DB.prepare(`
       INSERT INTO patients (user_id, clinic_id, full_name, email, phone)
@@ -208,7 +228,7 @@ app.post("/api/clinic-users", supabaseAuthMiddleware, async (c: any) => {
 });
 
 // Patients endpoints - now clinic-scoped
-app.get("/api/patients", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'doctor']), async (c: any) => {
+app.get("/api/patients", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'doctor', 'nurse']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   const { results } = await c.env.DB.prepare(
@@ -218,7 +238,7 @@ app.get("/api/patients", supabaseAuthMiddleware, clinicUserMiddleware, requireRo
   return c.json(results);
 });
 
-app.post("/api/patients", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
+app.post("/api/patients", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'nurse']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreatePatientSchema.parse(body);
@@ -268,7 +288,7 @@ app.get("/api/appointments", supabaseAuthMiddleware, clinicUserMiddleware, async
   return c.json(results);
 });
 
-app.post("/api/appointments", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
+app.post("/api/appointments", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'nurse']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreateAppointmentSchema.parse(body);
@@ -309,7 +329,7 @@ app.post("/api/appointments", supabaseAuthMiddleware, clinicUserMiddleware, requ
   return c.json({ success: true }, 201);
 });
 
-app.put("/api/appointments/:id/status", supabaseAuthMiddleware, clinicUserMiddleware, async (c: any) => {
+app.put("/api/appointments/:id/status", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'doctor', 'nurse']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const appointmentId = c.req.param("id");
   const body = await c.req.json();
@@ -484,6 +504,17 @@ app.get("/api/clinic-users/doctors", supabaseAuthMiddleware, clinicUserMiddlewar
   
   const { results } = await c.env.DB.prepare(
     "SELECT user_id, full_name FROM clinic_users WHERE role = 'doctor' AND clinic_id = ? ORDER BY full_name"
+  ).bind(clinicUser.clinic_id).all();
+
+  return c.json(results);
+});
+
+// Nurses picker (e.g., for triage assignments)
+app.get("/api/clinic-users/nurses", supabaseAuthMiddleware, clinicUserMiddleware, async (c: any) => {
+  const clinicUser = c.get("clinicUser");
+  
+  const { results } = await c.env.DB.prepare(
+    "SELECT user_id, full_name FROM clinic_users WHERE role = 'nurse' AND clinic_id = ? ORDER BY full_name"
   ).bind(clinicUser.clinic_id).all();
 
   return c.json(results);

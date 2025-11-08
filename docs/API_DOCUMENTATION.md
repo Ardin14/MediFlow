@@ -136,7 +136,7 @@ Content-Type: application/json
 **Authentication:** Required
 
 **Parameters:**
-- `role` (optional) - One of: `'admin'`, `'receptionist'`, `'doctor'`, `'patient'`. Defaults to `'patient'`
+- `role` (optional) - One of: `'admin'`, `'receptionist'`, `'doctor'`, `'nurse'`, `'patient'`. Defaults to `'patient'`
 - `full_name` (optional) - User's full name. Defaults to name from Google profile
 - `phone` (optional) - Contact phone number
 - `clinic_id` (required) - ID of the clinic to register with
@@ -165,7 +165,7 @@ GET /api/patients
 ```
 
 **Authentication:** Required  
-**Permissions:** `admin`, `receptionist`, `doctor`
+**Permissions:** `admin`, `receptionist`, `doctor`, `nurse`
 
 **Response:**
 ```json
@@ -210,7 +210,7 @@ Content-Type: application/json
 ```
 
 **Authentication:** Required  
-**Permissions:** `admin`, `receptionist`
+**Permissions:** `admin`, `receptionist`, `nurse`
 
 **Parameters:**
 - `full_name` (required) - Patient's full name
@@ -287,7 +287,7 @@ Content-Type: application/json
 ```
 
 **Authentication:** Required  
-**Permissions:** `admin`, `receptionist`
+**Permissions:** `admin`, `receptionist`, `nurse`
 
 **Parameters:**
 - `patient_id` (required) - ID from patients table
@@ -318,7 +318,7 @@ Content-Type: application/json
 ```
 
 **Authentication:** Required  
-**Permissions:** All roles
+**Permissions:** `admin`, `receptionist`, `doctor`, `nurse`
 
 **URL Parameters:**
 - `:id` - Appointment ID
@@ -558,6 +558,15 @@ All endpoints may return the following error responses:
 ---
 
 ### 403 Forbidden
+```json
+{
+  "error": "Awaiting clinic admin approval",
+  "status": "pending"
+}
+```
+Possible causes:
+- Clinic registration required
+- Account pending approval by clinic admin
 ```json
 {
   "error": "Insufficient permissions"

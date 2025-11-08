@@ -63,6 +63,7 @@ CREATE TABLE clinic_users (
   role TEXT NOT NULL,
   full_name TEXT,
   phone TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
   clinic_id INTEGER,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -72,9 +73,10 @@ CREATE TABLE clinic_users (
 **Fields:**
 - `id` - Auto-incrementing primary key
 - `user_id` - References MochaUser.id from the authentication system (unique)
-- `role` - User's role in the system. Valid values: `'admin'`, `'receptionist'`, `'doctor'`, `'patient'`
+- `role` - User's role in the system. Valid values: `'admin'`, `'receptionist'`, `'doctor'`, `'nurse'`, `'patient'`
 - `full_name` - User's full name
 - `phone` - Contact phone number
+- `status` - Account status within the clinic. One of: `'pending'`, `'active'`, `'inactive'` (defaults to `'pending'`). Pending users cannot access clinic data until approved by the clinic admin.
 - `clinic_id` - References `clinics.id` (provides clinic isolation)
 - `created_at` - Timestamp when the record was created
 - `updated_at` - Timestamp when the record was last updated

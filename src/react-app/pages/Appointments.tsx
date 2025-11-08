@@ -46,6 +46,23 @@ export default function Appointments() {
     }
   };
 
+  const allowedStatusRoles = ["admin", "receptionist", "nurse", "doctor"] as const;
+  const statuses = ["booked", "checked_in", "completed", "cancelled"] as const;
+
+  const updateStatus = async (id: number, status: string) => {
+    try {
+      await apiFetch(`/api/appointments/${id}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status }),
+        headers: { "Content-Type": "application/json" },
+      });
+      fetchData();
+    } catch (err) {
+      console.error("Failed to update status", err);
+      // optional: show a toast
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -61,7 +78,7 @@ export default function Appointments() {
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
-          {(clinicUser?.role === "admin" || clinicUser?.role === "receptionist") && (
+          {(clinicUser?.role === "admin" || clinicUser?.role === "receptionist" || clinicUser?.role === "nurse") && (
             <button 
               onClick={() => setShowScheduleModal(true)}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
@@ -100,9 +117,23 @@ export default function Appointments() {
                           minute: "2-digit"
                         })}
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
-                        {appointment.status.replace("_", " ")}
-                      </span>
+                      {clinicUser && allowedStatusRoles.includes(clinicUser.role) ? (
+                        <select
+                          className="px-2 py-1 rounded-full text-xs font-medium border border-gray-300 bg-white"
+                          value={appointment.status}
+                          onChange={(e) => updateStatus(appointment.id, e.target.value)}
+                        >
+                          {statuses.map((s) => (
+                            <option key={s} value={s}>
+                              {s.replace("_", " ")}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
+                          {appointment.status.replace("_", " ")}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
