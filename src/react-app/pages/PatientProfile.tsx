@@ -11,7 +11,6 @@ import { BloodTypeSchema, GenderSchema } from '../../shared/patient-types';
 
 export default function PatientProfile() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [patient, setPatient] = useState<EnhancedPatient | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

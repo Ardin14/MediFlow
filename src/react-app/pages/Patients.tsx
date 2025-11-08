@@ -215,19 +215,21 @@ export default function Patients() {
           </div>
         </div>
 
-        <AddPatientModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onPatientAdded={handlePatientAdded}
-          clinicId={clinicUser?.clinic_id}
-        />
+        {typeof clinicUser?.clinic_id === 'number' && (
+          <AddPatientModal
+            isOpen={showAddModal}
+            onClose={() => setShowAddModal(false)}
+            onPatientAdded={handlePatientAdded}
+            clinicId={clinicUser.clinic_id as number}
+          />
+        )}
 
-        {showTransferModal && (
+        {showTransferModal && typeof clinicUser?.clinic_id === 'number' && (
           <TransferPatientsModal
             isOpen={showTransferModal}
             onClose={() => setShowTransferModal(false)}
             patientIds={selectedPatients}
-            currentClinicId={clinicUser?.clinic_id}
+            currentClinicId={clinicUser.clinic_id as number}
             onTransferComplete={handleTransferComplete}
           />
         )}
