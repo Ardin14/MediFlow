@@ -1,13 +1,4 @@
 import { Hono } from "hono";
-// custom CORS handling (avoid permissive "*" in production)
-import {
-  exchangeCodeForSessionToken,
-  getOAuthRedirectUrl,
-  authMiddleware,
-  deleteSession,
-  MOCHA_SESSION_TOKEN_COOKIE_NAME,
-} from "@getmocha/users-service/backend";
-import { getCookie, setCookie } from "hono/cookie";
 import { 
   UserRole,
   CreatePatientSchema,
@@ -19,19 +10,28 @@ import {
   UpdateInvoiceStatusSchema,
   CreateClinicUserSchema
 } from "@/shared/types";
+import { supabaseAuthMiddleware, requireRole, clinicUserMiddleware } from './middleware/auth';
 
 // Worker environment bindings (documented here for reference)
 // Expected bindings:
 // - SUPABASE_URL: string
 // - SUPABASE_SERVICE_ROLE_KEY: string
-// - MOCHA_USERS_SERVICE_API_URL: string
-// - MOCHA_USERS_SERVICE_API_KEY: string
 // - ALLOWED_ORIGIN?: string (comma-separated allowlist)
 
 import { createSupabaseClient } from './db/supabase';
 import { DataAccessLayer } from './db/dal';
 
 const app = new Hono();
+
+// Global error catcher: ensure any thrown error returns JSON so frontend can parse it
+app.use('*', async (c: any, next: any) => {
+  try {
+    await next();
+  } catch (err: any) {
+    (globalThis as any).console?.error?.('Unhandled worker error', err);
+    return c.json({ error: err?.message || 'Internal Server Error' }, 500);
+  }
+});
 
 app.use('*', async (c: any, next: any) => {
   const supabase = createSupabaseClient(c.env);
@@ -142,120 +142,17 @@ app.use("/*", async (c: any, next: any) => {
   }
 });
 
-// Helper middleware to get clinic user info
-const clinicUserMiddleware = async (c: any, next: any) => {
+// Note: `clinicUserMiddleware` and `requireRole` are provided by ./middleware/auth and imported above.
+
+// User endpoints using Supabase auth
+app.get("/api/users/me", supabaseAuthMiddleware, async (c: any) => {
   const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const { results } = await c.env.DB.prepare(
-    "SELECT cu.*, cl.name as clinic_name FROM clinic_users cu JOIN clinics cl ON cu.clinic_id = cl.id WHERE cu.user_id = ?"
-  ).bind(user.id).all();
-
-  if (results.length === 0) {
-    return c.json({ error: "User not registered in clinic system" }, 403);
-  }
-
-  c.set("clinicUser", results[0]);
-  await next();
-};
-
-// Helper function to check role permissions
-const requireRole = (allowedRoles: UserRole[]) => {
-  return async (c: any, next: any) => {
-    const clinicUser = c.get("clinicUser");
-    if (!clinicUser || !allowedRoles.includes(clinicUser.role)) {
-      return c.json({ error: "Insufficient permissions" }, 403);
-    }
-    await next();
-  };
-};
-
-// Authentication endpoints
-app.get('/api/oauth/google/redirect_url', async (c: any) => {
-  try {
-    const apiUrl = c.env.MOCHA_USERS_SERVICE_API_URL;
-    const apiKey = c.env.MOCHA_USERS_SERVICE_API_KEY;
-
-    if (!apiUrl || !apiKey) {
-      // Misconfiguration — return helpful error
-      logError('Missing MOCHA_USERS_SERVICE_API_URL or API_KEY');
-      return c.json({ error: 'Server misconfiguration: authentication service not configured' }, 500);
-    }
-
-    const redirectUrl = await getOAuthRedirectUrl('google', {
-      apiUrl,
-      apiKey,
-    });
-
-    return c.json({ redirectUrl }, 200);
-  } catch (err) {
-    logError('Failed to get OAuth redirect URL', err);
-    return c.json({ error: 'Failed to get login redirect URL' }, 500);
-  }
-});
-
-app.post("/api/sessions", async (c: any) => {
-  const body = await c.req.json();
-
-  if (!body.code) {
-    return c.json({ error: "No authorization code provided" }, 400);
-  }
-
-  const sessionToken = await exchangeCodeForSessionToken(body.code, {
-    apiUrl: c.env.MOCHA_USERS_SERVICE_API_URL,
-    apiKey: c.env.MOCHA_USERS_SERVICE_API_KEY,
-  });
-
-  setCookie(c, MOCHA_SESSION_TOKEN_COOKIE_NAME, sessionToken, {
-    httpOnly: true,
-    path: "/",
-    sameSite: "none",
-    secure: true,
-    maxAge: 60 * 24 * 60 * 60, // 60 days
-  });
-
-  return c.json({ success: true }, 200);
-});
-
-app.get("/api/users/me", authMiddleware, async (c: any) => {
-  const user = c.get("user");
-  
-  // Get clinic user info if exists
-  const { results } = await c.env.DB.prepare(
-    "SELECT cu.*, cl.name as clinic_name FROM clinic_users cu JOIN clinics cl ON cu.clinic_id = cl.id WHERE cu.user_id = ?"
-  ).bind(user!.id).all();
-
-  return c.json({ 
-    user, 
-    clinicUser: results.length > 0 ? results[0] : null 
-  });
-});
-
-app.get('/api/logout', async (c: any) => {
-  const sessionToken = getCookie(c, MOCHA_SESSION_TOKEN_COOKIE_NAME);
-
-  if (typeof sessionToken === 'string') {
-    await deleteSession(sessionToken, {
-      apiUrl: c.env.MOCHA_USERS_SERVICE_API_URL,
-      apiKey: c.env.MOCHA_USERS_SERVICE_API_KEY,
-    });
-  }
-
-  setCookie(c, MOCHA_SESSION_TOKEN_COOKIE_NAME, '', {
-    httpOnly: true,
-    path: '/',
-    sameSite: 'none',
-    secure: true,
-    maxAge: 0,
-  });
-
-  return c.json({ success: true }, 200);
+  const clinicUser = c.get("clinicUser");
+  return c.json({ user, clinicUser });
 });
 
 // Get available clinics for registration
-app.get("/api/clinics", authMiddleware, async (c: any) => {
+app.get("/api/clinics", supabaseAuthMiddleware, async (c: any) => {
   const { results } = await c.env.DB.prepare(
     "SELECT id, name, address, phone, email FROM clinics ORDER BY name"
   ).all();
@@ -264,7 +161,7 @@ app.get("/api/clinics", authMiddleware, async (c: any) => {
 });
 
 // Clinic user registration/management
-app.post("/api/clinic-users", authMiddleware, async (c: any) => {
+app.post("/api/clinic-users", supabaseAuthMiddleware, async (c: any) => {
   const user = c.get("user");
   const body = await c.req.json();
 
@@ -311,7 +208,7 @@ app.post("/api/clinic-users", authMiddleware, async (c: any) => {
 });
 
 // Patients endpoints - now clinic-scoped
-app.get("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'doctor']), async (c: any) => {
+app.get("/api/patients", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist', 'doctor']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   const { results } = await c.env.DB.prepare(
@@ -321,7 +218,7 @@ app.get("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['adm
   return c.json(results);
 });
 
-app.post("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
+app.post("/api/patients", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreatePatientSchema.parse(body);
@@ -348,7 +245,7 @@ app.post("/api/patients", authMiddleware, clinicUserMiddleware, requireRole(['ad
 });
 
 // Appointments endpoints - now clinic-scoped
-app.get("/api/appointments", authMiddleware, clinicUserMiddleware, async (c: any) => {
+app.get("/api/appointments", supabaseAuthMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   let query = `
     SELECT a.*, p.full_name as patient_name, cu.full_name as doctor_name 
@@ -371,7 +268,7 @@ app.get("/api/appointments", authMiddleware, clinicUserMiddleware, async (c: any
   return c.json(results);
 });
 
-app.post("/api/appointments", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
+app.post("/api/appointments", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreateAppointmentSchema.parse(body);
@@ -412,7 +309,7 @@ app.post("/api/appointments", authMiddleware, clinicUserMiddleware, requireRole(
   return c.json({ success: true }, 201);
 });
 
-app.put("/api/appointments/:id/status", authMiddleware, clinicUserMiddleware, async (c: any) => {
+app.put("/api/appointments/:id/status", supabaseAuthMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const appointmentId = c.req.param("id");
   const body = await c.req.json();
@@ -439,7 +336,7 @@ app.put("/api/appointments/:id/status", authMiddleware, clinicUserMiddleware, as
 });
 
 // Visits endpoints - now clinic-scoped
-app.post("/api/visits", authMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c: any) => {
+app.post("/api/visits", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreateVisitSchema.parse(body);
@@ -477,7 +374,7 @@ app.post("/api/visits", authMiddleware, clinicUserMiddleware, requireRole(['doct
 });
 
 // Prescriptions endpoints - now clinic-scoped
-app.post("/api/prescriptions", authMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c: any) => {
+app.post("/api/prescriptions", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['doctor']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreatePrescriptionSchema.parse(body);
@@ -510,7 +407,7 @@ app.post("/api/prescriptions", authMiddleware, clinicUserMiddleware, requireRole
 });
 
 // Invoices endpoints - now clinic-scoped
-app.get("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
+app.get("/api/invoices", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   const { results } = await c.env.DB.prepare(`
@@ -524,7 +421,7 @@ app.get("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['adm
   return c.json(results);
 });
 
-app.post("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
+app.post("/api/invoices", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const body = await c.req.json();
   const validatedData = CreateInvoiceSchema.parse(body);
@@ -555,7 +452,7 @@ app.post("/api/invoices", authMiddleware, clinicUserMiddleware, requireRole(['ad
   return c.json({ success: true }, 201);
 });
 
-app.put("/api/invoices/:id/status", authMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
+app.put("/api/invoices/:id/status", supabaseAuthMiddleware, clinicUserMiddleware, requireRole(['admin', 'receptionist']), async (c: any) => {
   const clinicUser = c.get("clinicUser");
   const invoiceId = c.req.param("id");
   const body = await c.req.json();
@@ -582,7 +479,7 @@ app.put("/api/invoices/:id/status", authMiddleware, clinicUserMiddleware, requir
 });
 
 // Get clinic users by role (for scheduling appointments) - now clinic-scoped
-app.get("/api/clinic-users/doctors", authMiddleware, clinicUserMiddleware, async (c: any) => {
+app.get("/api/clinic-users/doctors", supabaseAuthMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   const { results } = await c.env.DB.prepare(
@@ -593,7 +490,7 @@ app.get("/api/clinic-users/doctors", authMiddleware, clinicUserMiddleware, async
 });
 
 // Dashboard stats endpoint - now clinic-scoped
-app.get("/api/dashboard/stats", authMiddleware, clinicUserMiddleware, async (c: any) => {
+app.get("/api/dashboard/stats", supabaseAuthMiddleware, clinicUserMiddleware, async (c: any) => {
   const clinicUser = c.get("clinicUser");
   
   // Get total patients for this clinic

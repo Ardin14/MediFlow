@@ -24,28 +24,57 @@ export default function Setup({ session }: SetupProps) {
     setLoading(true);
     setError(null);
 
-    const payload = {
-      user_id: session.user.id,
-      role: selectedRole,
-      full_name: displayName || session.user.email,
-      clinic_id: null,
-    } as any;
+    try {
+      // First, check if user already exists in clinic_users
+      const { data: existingUser } = await supabase
+        .from('clinic_users')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
 
-    const { error } = await supabase
-      .from('clinic_users')
-      .insert(payload)
-      .select()
-      .maybeSingle();
+      if (existingUser) {
+        // User already exists, redirect to dashboard
+        navigate('/dashboard');
+        return;
+      }
 
-    setLoading(false);
+      // Create a new clinic first
+      const { data: clinic, error: clinicError } = await supabase
+        .from('clinics')
+        .insert({
+          name: 'My Clinic', // You might want to add a clinic name field to the form
+          address: 'TBD'     // You might want to add address fields to the form
+        })
+        .select()
+        .single();
 
-    if (error) {
+      if (clinicError) throw clinicError;
+
+      // Then create the clinic user as admin
+      // Note: not including `email` here because some DB deployments
+      // may not have an `email` column on clinic_users (causes 42703 errors).
+      const { error: userError } = await supabase
+        .from('clinic_users')
+        .insert({
+          user_id: session.user.id,
+          clinic_id: clinic.id,
+          role: selectedRole,
+          full_name: displayName || session.user.email,
+          status: 'active'
+        })
+        .select()
+        .single();
+
+      if (userError) throw userError;
+
+      // On success navigate to dashboard
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error('Setup error:', error);
       setError(error.message);
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    // On success navigate to dashboard
-    navigate('/dashboard');
   };
 
   return (

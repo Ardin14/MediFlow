@@ -1,8 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
-import { useEffect, useState } from 'react';
-import { Session } from '@supabase/supabase-js';
+import { useAuth } from '@/react-app/contexts/AuthContext';
 import { supabase } from './lib/supabaseClient';
 
 // Page imports
@@ -15,23 +14,10 @@ import BillingPage from "./pages/Billing";
 import ReportsPage from "./pages/Reports";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SetupPage from "./pages/Setup";
+import SetupExistingGuard from "./components/SetupExistingGuard";
 
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const { session } = useAuth();
 
   return (
     <Router>
@@ -57,17 +43,19 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute session={session}>
+            <ProtectedRoute>
               <DashboardPage />
             </ProtectedRoute>
           }
         />
 
-        <Route
+                <Route
           path="/setup"
           element={
             session ? (
-              <SetupPage session={session} />
+              <SetupExistingGuard>
+                <SetupPage session={session} />
+              </SetupExistingGuard>
             ) : (
               <Navigate to="/" replace />
             )
@@ -77,7 +65,7 @@ export default function App() {
         <Route
           path="/patients"
           element={
-            <ProtectedRoute session={session}>
+            <ProtectedRoute>
               <PatientsPage />
             </ProtectedRoute>
           }
@@ -86,7 +74,7 @@ export default function App() {
         <Route
           path="/patients/:id"
           element={
-            <ProtectedRoute session={session}>
+            <ProtectedRoute>
               <PatientProfilePage />
             </ProtectedRoute>
           }
@@ -95,7 +83,7 @@ export default function App() {
         <Route
           path="/appointments"
           element={
-            <ProtectedRoute session={session}>
+            <ProtectedRoute>
               <AppointmentsPage />
             </ProtectedRoute>
           }
@@ -104,7 +92,7 @@ export default function App() {
         <Route
           path="/consultation"
           element={
-            <ProtectedRoute session={session}>
+            <ProtectedRoute>
               <ConsultationPage />
             </ProtectedRoute>
           }
@@ -113,7 +101,7 @@ export default function App() {
         <Route
           path="/billing"
           element={
-            <ProtectedRoute session={session}>
+            <ProtectedRoute>
               <BillingPage />
             </ProtectedRoute>
           }
@@ -122,7 +110,7 @@ export default function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute session={session}>
+            <ProtectedRoute>
               <ReportsPage />
             </ProtectedRoute>
           }

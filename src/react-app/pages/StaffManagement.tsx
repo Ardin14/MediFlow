@@ -54,6 +54,7 @@ function AddStaffModal({ isOpen, onClose, onStaffAdded, clinicId }: AddStaffModa
       if (authError) throw authError;
 
       // 2. Create clinic_user record
+      // Avoid inserting `email` directly into clinic_users to support DBs without that column.
       const { error: staffError } = await supabase
         .from('clinic_users')
         .insert({
@@ -61,7 +62,6 @@ function AddStaffModal({ isOpen, onClose, onStaffAdded, clinicId }: AddStaffModa
           clinic_id: clinicId,
           role: form.role,
           full_name: form.fullName,
-          email: form.email,
           phone: form.phone,
           status: 'pending'
         });
@@ -254,7 +254,7 @@ export default function StaffManagement() {
 
   if (loading) {
     return (
-      <Layout clinicUser={clinicUser}>
+      <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -263,7 +263,7 @@ export default function StaffManagement() {
   }
 
   return (
-    <Layout clinicUser={clinicUser}>
+    <Layout>
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Staff Management</h1>

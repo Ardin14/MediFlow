@@ -1,9 +1,17 @@
 export type ApiResponse<T> = T | { error?: string };
 
+import { supabase } from './supabaseClient';
+
 export async function apiFetch<T = any>(input: string, init?: RequestInit): Promise<T> {
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token;
+
   const finalInit: RequestInit = {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : ''
+    },
     ...init,
   };
 

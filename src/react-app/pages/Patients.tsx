@@ -3,10 +3,11 @@ import Layout from "@/react-app/components/Layout";
 import AddPatientModal from "@/react-app/components/AddPatientModal";
 import TransferPatientsModal from "@/react-app/components/TransferPatientsModal";
 import { Plus, Search, Edit, Trash2, Move } from "lucide-react";
-import { apiFetch } from "@/react-app/lib/api";
+import { useAuth } from "@/react-app/contexts/AuthContext";
+import { supabase } from "@/react-app/lib/supabaseClient";
 
 export default function Patients() {
-  const [clinicUser, setClinicUser] = useState<any>(null);
+  const { clinicUser } = useAuth();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -16,11 +17,24 @@ export default function Patients() {
 
   const fetchData = async () => {
     try {
-      const userData = await apiFetch<any>("/api/users/me");
-      setClinicUser(userData.clinicUser);
+      if (!clinicUser?.clinic_id) {
+        setPatients([]);
+        return;
+      }
 
-      const patientsData = await apiFetch<any[]>("/api/patients");
-      setPatients(patientsData || []);
+      // Fetch patients directly from Supabase for dev/local without API proxy
+      const { data, error } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('clinic_id', clinicUser.clinic_id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Error fetching patients from Supabase:", error);
+        setPatients([]);
+      } else {
+        setPatients(data || []);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -30,7 +44,8 @@ export default function Patients() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // Re-run when clinic changes becomes available
+  }, [clinicUser?.clinic_id]);
 
   const handlePatientAdded = () => {
     // Refresh the patients list
@@ -68,7 +83,7 @@ export default function Patients() {
 
   if (loading) {
     return (
-      <Layout clinicUser={clinicUser}>
+      <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -77,19 +92,25 @@ export default function Patients() {
   }
 
   return (
-    <Layout clinicUser={clinicUser}>
+    <Layout>
       <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold text-gray-900">Patients</h1>
-            {selectedPatients.length > 0 && (
-              <span className="text-sm text-gray-500">
-                {selectedPatients.length} selected
-              </span>
-            )}
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Patients</h1>
+        
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex-1 max-w-xl">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search patients..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            </div>
           </div>
-
-          <div className="flex space-x-3">
+          
+          <div className="flex gap-3">
             {selectedPatients.length > 0 && (
               <button
                 onClick={() => setShowTransferModal(true)}
@@ -99,33 +120,17 @@ export default function Patients() {
                 Transfer Selected
               </button>
             )}
-            {(clinicUser?.role === "admin" ||
-              clinicUser?.role === "receptionist") && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Patient
-              </button>
-            )}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Patient
+            </button>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-6 border-b border-gray-100">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search patients..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">

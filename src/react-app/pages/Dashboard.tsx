@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@getmocha/users-service/react";
+import { useAuth } from "@/react-app/contexts/AuthContext";
 import Layout from "@/react-app/components/Layout";
+import { supabase } from "@/react-app/lib/supabaseClient";
 import { 
   Users, 
   Calendar, 
@@ -18,34 +19,125 @@ interface DashboardStats {
   pendingInvoices: number;
 }
 
+interface Appointment {
+  id: number;
+  appointment_date: string;
+  status: string;
+  reason?: string;
+  patient: {
+    full_name: string;
+  };
+}
+
 export default function Dashboard() {
-  const { user } = useAuth();
-  const [clinicUser, setClinicUser] = useState<any>(null);
+  const { user, clinicUser, isLoading: authLoading } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0,
     todayAppointments: 0,
     pendingInvoices: 0
   });
-  const [recentAppointments, setRecentAppointments] = useState([]);
+  const [recentAppointments, setRecentAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      console.log('Dashboard fetchData - clinicUser:', clinicUser);
+      
+      // Initially, wait for auth loading to complete
+      if (authLoading) {
+        console.log('Auth still loading, waiting...');
+        return;
+      }
+
+      if (!clinicUser?.clinic_id) {
+        console.log('No clinic_id available, skipping fetch');
+        setLoading(false);
+        return;
+      }
+
       try {
-        // Get clinic user info
-        const userResponse = await fetch("/api/users/me");
-        const userData = await userResponse.json();
-        setClinicUser(userData.clinicUser);
+        console.log('Starting dashboard data fetch for clinic:', { 
+          clinic_id: clinicUser.clinic_id,
+          id: clinicUser.id
+        });
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        // Get dashboard stats
-        const statsResponse = await fetch("/api/dashboard/stats");
-        const statsData = await statsResponse.json();
-        setStats(statsData);
+        // Get dashboard stats using Supabase queries
+        console.log('Fetching data for clinic_id:', clinicUser.clinic_id);
+        
+        const { data: patients, error: patientsError } = await supabase
+          .from('patients')
+          .select('id', { count: 'exact' })
+          .eq('clinic_id', clinicUser.clinic_id);
 
-        // Get recent appointments
-        const appointmentsResponse = await fetch("/api/appointments");
-        const appointmentsData = await appointmentsResponse.json();
-        setRecentAppointments(appointmentsData.slice(0, 5));
+        if (patientsError) {
+          console.error('Error fetching patients:', patientsError);
+        } else {
+          console.log('Patients data:', patients);
+        }
+
+        const { data: todayAppts, error: apptsError } = await supabase
+          .from('appointments')
+          .select('id', { count: 'exact' })
+          .eq('clinic_id', clinicUser.clinic_id)
+          .gte('appointment_date', today.toISOString())
+          .lt('appointment_date', new Date(today.getTime() + 24*60*60*1000).toISOString());
+
+        if (apptsError) {
+          console.error('Error fetching appointments:', apptsError);
+        } else {
+          console.log('Today appointments:', todayAppts);
+        }
+
+        // Pending invoices: be robust to schema differences (payment_status vs status)
+        let pendingInvoicesCount = 0;
+        try {
+          const { data: pendingByPaymentStatus, error: invErr1 } = await supabase
+            .from('invoices')
+            .select('id', { count: 'exact' })
+            .eq('payment_status', 'pending')
+            .eq('clinic_id', clinicUser.clinic_id);
+
+          if (invErr1) {
+            // Fallback to 'status' column if 'payment_status' doesn't exist (Supabase schema variant)
+            const { data: pendingByStatus, error: invErr2 } = await supabase
+              .from('invoices')
+              .select('id', { count: 'exact' })
+              .eq('status', 'pending')
+              .eq('clinic_id', clinicUser.clinic_id);
+
+            if (!invErr2) {
+              pendingInvoicesCount = pendingByStatus?.length || 0;
+            } else {
+              console.warn('Invoice pending count failed on both columns', { invErr1, invErr2 });
+            }
+          } else {
+            pendingInvoicesCount = pendingByPaymentStatus?.length || 0;
+          }
+        } catch (e) {
+          console.warn('Invoice pending count query threw unexpectedly', e);
+        }
+
+        setStats({
+          totalPatients: patients?.length || 0,
+          todayAppointments: todayAppts?.length || 0,
+          pendingInvoices: pendingInvoicesCount
+        });
+
+        // Get recent appointments with patient details
+        const { data: appointments } = await supabase
+          .from('appointments')
+          .select(`
+            *,
+            patient:patients(full_name)
+          `)
+          .eq('clinic_id', clinicUser.clinic_id)
+          .order('appointment_date', { ascending: true })
+          .limit(5);
+
+        setRecentAppointments(appointments || []);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -54,7 +146,7 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, []);
+  }, [clinicUser?.clinic_id]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -161,23 +253,44 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    // Set loading to false if we've loaded and there's no clinic user
+    if (!authLoading && !clinicUser) {
+      setLoading(false);
+    }
+  }, [authLoading, clinicUser]);
+
+  if (authLoading || loading) {
+    console.log('Dashboard loading state:', { loading, authLoading, clinicUser });
     return (
-      <Layout clinicUser={clinicUser}>
+      <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="ml-3 text-sm text-gray-600">
+            {authLoading ? 'Loading user data...' : 'Loading dashboard...'}
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!clinicUser?.id) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">No clinic access. Please contact administrator.</div>
         </div>
       </Layout>
     );
   }
 
   return (
-    <Layout clinicUser={clinicUser}>
+    <Layout>
       <div className="p-6">
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            {getGreeting()}, {clinicUser?.full_name || user?.google_user_data?.name}!
+            {getGreeting()}, {clinicUser?.full_name || user?.user_metadata?.full_name || user?.email}!
           </h1>
           <p className="text-gray-600 mt-1">
             {clinicUser?.role === "patient" 
@@ -220,7 +333,7 @@ export default function Dashboard() {
                   {recentAppointments.map((appointment: any) => (
                     <div key={appointment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
-                        <p className="font-medium text-gray-900">{appointment.patient_name}</p>
+                        <h3 className="font-medium text-gray-900">{appointment.patient.full_name}</h3>
                         <p className="text-sm text-gray-600">
                           {new Date(appointment.appointment_date).toLocaleDateString()} at{" "}
                           {new Date(appointment.appointment_date).toLocaleTimeString([], {

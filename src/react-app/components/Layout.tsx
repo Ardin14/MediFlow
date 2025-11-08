@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useAuth } from "@getmocha/users-service/react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useAuth } from "@/react-app/contexts/AuthContext";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Stethoscope,
   LayoutDashboard,
@@ -18,17 +18,16 @@ import {
 
 interface LayoutProps {
   children: React.ReactNode;
-  clinicUser?: any;
 }
 
-export default function Layout({ children, clinicUser }: LayoutProps) {
-  const { user, logout } = useAuth();
+export default function Layout({ children }: LayoutProps) {
+  const { user, clinicUser, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
-    await logout();
+    await signOut();
     navigate("/");
   };
 
@@ -163,7 +162,7 @@ export default function Layout({ children, clinicUser }: LayoutProps) {
                 </div>
                 <div className="hidden sm:block">
                   <p className="text-sm font-medium text-gray-900">
-                    {clinicUser?.full_name || user?.google_user_data?.name || "User"}
+                    {clinicUser?.full_name || user?.user_metadata?.full_name || user?.email || "User"}
                   </p>
                   <p className="text-xs text-gray-500 capitalize">
                     {clinicUser?.role || "Patient"} 

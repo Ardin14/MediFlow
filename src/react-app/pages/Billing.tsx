@@ -1,21 +1,54 @@
 import { useState, useEffect } from "react";
 import Layout from "@/react-app/components/Layout";
 import { Plus, DollarSign, Check, Clock } from "lucide-react";
-import { apiFetch } from "@/react-app/lib/api";
+import { useAuth } from "@/react-app/contexts/AuthContext";
+import { supabase } from "@/react-app/lib/supabaseClient";
 
 export default function Billing() {
-  const [clinicUser, setClinicUser] = useState<any>(null);
+  const { clinicUser } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const userData = await apiFetch<any>("/api/users/me");
-        setClinicUser(userData.clinicUser);
+        if (!clinicUser?.clinic_id) {
+          setInvoices([]);
+          return;
+        }
 
-        const invoicesData = await apiFetch<any[]>("/api/invoices");
-        setInvoices(invoicesData || []);
+        // Fetch invoices directly from Supabase and normalize fields for UI
+        const { data, error } = await supabase
+          .from('invoices')
+          .select(`*, patient:patients(full_name)`) // relies on FK invoices.patient_id -> patients.id
+          .eq('clinic_id', clinicUser.clinic_id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error("Error fetching invoices from Supabase:", error);
+          setInvoices([]);
+          return;
+        }
+
+        const normalized = (data || []).map((inv: any) => {
+          // Harmonize schema differences across environments
+          const rawAmount = inv.amount ?? inv.total; // total may be a string
+          const amount = typeof rawAmount === 'string' ? Number(rawAmount) : (rawAmount ?? 0);
+          const date = inv.date ?? inv.created_at ?? null;
+          let status = inv.payment_status ?? inv.status ?? 'pending';
+          if (status === 'open') status = 'pending';
+          const patient_name = inv.patient_name ?? inv.patient?.full_name ?? '';
+          return {
+            id: inv.id,
+            patient_name,
+            amount,
+            date,
+            payment_status: status,
+            description: inv.description ?? null,
+          };
+        });
+
+        setInvoices(normalized);
       } catch (error) {
         console.error("Error fetching invoices:", error);
       } finally {
@@ -24,23 +57,25 @@ export default function Billing() {
     };
 
     fetchData();
-  }, []);
+  }, [clinicUser?.clinic_id]);
 
   const getStatusIcon = (status: string) => {
-    return status === "paid" ? 
+    const s = status === 'open' ? 'pending' : status;
+    return s === "paid" ? 
       <Check className="w-4 h-4 text-green-500" /> : 
       <Clock className="w-4 h-4 text-yellow-500" />;
   };
 
   const getStatusColor = (status: string) => {
-    return status === "paid" ? 
+    const s = status === 'open' ? 'pending' : status;
+    return s === "paid" ? 
       "bg-green-100 text-green-800" : 
       "bg-yellow-100 text-yellow-800";
   };
 
   if (loading) {
     return (
-      <Layout clinicUser={clinicUser}>
+      <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -49,7 +84,7 @@ export default function Billing() {
   }
 
   return (
-    <Layout clinicUser={clinicUser}>
+    <Layout>
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Billing & Invoices</h1>
