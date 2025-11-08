@@ -37,7 +37,7 @@ export default function Setup({ session }: SetupProps) {
 
       if (!clinicName.trim()) throw new Error('Clinic name is required');
 
-      const { data, error: rpcError } = await supabase.rpc('create_clinic_and_admin', {
+      const { error: rpcError } = await supabase.rpc('create_clinic_and_admin', {
         p_name: clinicName.trim(),
         p_address: clinicAddress || null,
         p_phone: clinicPhone || null,

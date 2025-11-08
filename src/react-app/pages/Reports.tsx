@@ -3,7 +3,7 @@ import Layout from "@/react-app/components/Layout";
 import { BarChart3, TrendingUp, Users, Calendar } from "lucide-react";
 
 export default function Reports() {
-  const [clinicUser, setClinicUser] = useState<any>(null);
+  const [, setClinicUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

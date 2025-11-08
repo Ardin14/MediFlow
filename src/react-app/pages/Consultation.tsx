@@ -6,7 +6,7 @@ import { apiFetch } from "@/react-app/lib/api";
 
 export default function Consultation() {
   const { appointmentId } = useParams();
-  const [clinicUser, setClinicUser] = useState<any>(null);
+  const [, setClinicUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

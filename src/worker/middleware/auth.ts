@@ -55,7 +55,7 @@ export const supabaseAuthMiddleware = async (c: any, next: () => Promise<void>) 
             clinic_name: Array.isArray((suClinicUser as any).clinic) ? (suClinicUser as any).clinic[0]?.name : (suClinicUser as any).clinic?.name,
           };
         }
-      } catch (e) {
+      } catch {
         // ignore and fallback to D1
       }
 

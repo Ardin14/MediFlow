@@ -22,7 +22,7 @@ export async function apiFetch<T = any>(input: string, init?: RequestInit): Prom
     try {
       // try to clear any client-side state then redirect
       window.location.href = '/';
-    } catch (e) {
+    } catch {
       /* ignore */
     }
     throw new Error('Unauthorized');
@@ -32,7 +32,7 @@ export async function apiFetch<T = any>(input: string, init?: RequestInit): Prom
   let data: any = null;
   try {
     data = text ? JSON.parse(text) : {};
-  } catch (err) {
+  } catch {
     throw new Error('Invalid JSON response');
   }
 

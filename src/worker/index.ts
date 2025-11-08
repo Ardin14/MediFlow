@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { 
-  UserRole,
   CreatePatientSchema,
   CreateAppointmentSchema,
   UpdateAppointmentStatusSchema,
@@ -77,7 +76,7 @@ const useKVRateLimit = async (c: any, ip: string): Promise<boolean> => {
 
     await kv.put(key, JSON.stringify(entry), { expirationTtl: Math.ceil(RATE_LIMIT_WINDOW_MS / 1000) });
     return false;
-  } catch (err) {
+  } catch {
     // if KV fails, fallback to in-memory approach
     return false;
   }
@@ -274,7 +273,7 @@ app.get("/api/appointments", supabaseAuthMiddleware, clinicUserMiddleware, async
     JOIN clinic_users cu ON a.doctor_id = cu.user_id 
     WHERE a.clinic_id = ?
   `;
-  let params: any[] = [clinicUser.clinic_id];
+  const params: any[] = [clinicUser.clinic_id];
 
   // Doctors can only see their own appointments
   if (clinicUser.role === 'doctor') {

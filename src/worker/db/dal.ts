@@ -7,11 +7,10 @@ type AnySupabase = SupabaseClient<any>;
 type Tables = Database['public']['Tables'];
 
 export class DataAccessLayer {
-  constructor(private readonly supabase: AnySupabase) {}
+  constructor(private readonly _supabase: AnySupabase) {}
 
   // Clinic Users
-  async getClinicUser(userId: string): Promise<any> {
-    const { data, error } = await this.supabase
+  async getClinicUser(userId: string): Promise<any> {    const { data, error } = await this._supabase
       .from('clinic_users')
       .select()
       .eq('user_id', userId)
@@ -22,7 +21,7 @@ export class DataAccessLayer {
   }
 
   async createClinicUser(userData: Omit<Tables['clinic_users']['Insert'], 'id'>): Promise<any> {
-    const { data, error } = await this.supabase
+    const { data, error } = await this._supabase
       .from('clinic_users')
       .insert([userData])
       .select()
@@ -34,7 +33,7 @@ export class DataAccessLayer {
 
   // Patients
   async getPatient(id: number): Promise<any> {
-    const { data, error } = await this.supabase
+    const { data, error } = await this._supabase
       .from('patients')
       .select()
       .eq('id', id)
@@ -45,7 +44,7 @@ export class DataAccessLayer {
   }
 
   async createPatient(patientData: Omit<Tables['patients']['Insert'], 'id'>): Promise<any> {
-    const { data, error } = await this.supabase
+    const { data, error } = await this._supabase
       .from('patients')
       .insert([patientData])
       .select()
@@ -57,7 +56,7 @@ export class DataAccessLayer {
 
   // Appointments
   async getAppointments(patientId?: number, doctorId?: number): Promise<any[]> {
-    let query = this.supabase
+    let query = this._supabase
       .from('appointments')
       .select();
     
@@ -74,7 +73,8 @@ export class DataAccessLayer {
   }
 
   async createAppointment(appointmentData: Omit<Tables['appointments']['Insert'], 'id'>): Promise<any> {
-    const { data, error } = await this.supabase
+    const { data, error } = await this._supabase
+
       .from('appointments')
       .insert([appointmentData])
       .select()
@@ -85,7 +85,7 @@ export class DataAccessLayer {
   }
 
   async updateAppointmentStatus(id: number, status: string): Promise<any> {
-    const { data, error } = await this.supabase
+    const { data, error } = await this._supabase
       .from('appointments')
       .update({ status })
       .eq('id', id)

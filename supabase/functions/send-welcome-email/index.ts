@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { serve } from 'https://deno.fresh.dev/std/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js';
 
@@ -16,14 +15,14 @@ serve(async (req) => {
     const { email, password, name, role } = await req.json();
 
     // Initialize Supabase client with service role key
-    const supabase = createClient(
+    const _supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     // Send email using your preferred email service
     // This is a placeholder - replace with your actual email sending logic
-    const emailContent = `
+    const _emailContent = `
       Hello ${name},
 
       You have been invited to join MediFlow as a ${role}. 

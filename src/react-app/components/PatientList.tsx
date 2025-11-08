@@ -8,7 +8,6 @@ import { supabase } from '../lib/supabaseClient';
 import type { 
   EnhancedPatient, 
   PatientSearchParams, 
-  PatientListResponse,
   Gender,
   BloodType
 } from '../../shared/patient-types';
