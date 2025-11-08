@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -31,6 +31,7 @@ export default function AddPatientModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const errorRef = useRef<HTMLDivElement | null>(null);
 
   const validateForm = () => {
     if (!formData.full_name.trim()) {
@@ -44,9 +45,17 @@ export default function AddPatientModal({
     }
     if (formData.date_of_birth) {
       const date = new Date(formData.date_of_birth);
-      if (isNaN(date.getTime()) || date > new Date()) {
-        throw new Error("Invalid date of birth");
+      if (isNaN(date.getTime())) {
+        throw new Error("Invalid date format for date of birth");
       }
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if (date > today) {
+        throw new Error("Date of birth cannot be in the future");
+      }
+    }
+    if (!clinicId) {
+      throw new Error("Clinic not resolved yet. Please wait and try again.");
     }
   };
 
@@ -90,6 +99,8 @@ export default function AddPatientModal({
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add patient");
+      // Bring the error into view so users notice it
+      setTimeout(() => errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
     } finally {
       setLoading(false);
     }
@@ -124,7 +135,7 @@ export default function AddPatientModal({
 
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <div ref={errorRef} className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
               {error}
             </div>
           )}
@@ -175,8 +186,10 @@ export default function AddPatientModal({
                   name="date_of_birth"
                   value={formData.date_of_birth}
                   onChange={handleInputChange}
+                  max={new Date().toISOString().split('T')[0]}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+                <p className="mt-1 text-xs text-gray-500">Date of birth cannot be in the future.</p>
               </div>
 
               <div>
