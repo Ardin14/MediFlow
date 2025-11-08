@@ -551,7 +551,59 @@ create policy clinics_select_auth
 on clinics for select
 using (true);
 
--- No client-side insert/update/delete; manage via server or privileged function
+-- Update clinic details: only clinic admins
+create policy clinics_update_admin
+on clinics for update
+using (has_role_in_clinic(clinics.id, array['admin']))
+with check (has_role_in_clinic(clinics.id, array['admin']));
+
+-- Delete clinic: only clinic admins (optional)
+create policy clinics_delete_admin
+on clinics for delete
+using (has_role_in_clinic(clinics.id, array['admin']));
+
+-- IMPORTANT: do not allow direct INSERTs; use the function below
+
+-- Function to create a clinic and make the caller its admin (atomic)
+create or replace function create_clinic_and_admin(
+  p_name text,
+  p_address text default null,
+  p_phone text default null,
+  p_admin_full_name text default null,
+  p_admin_phone text default null
+) returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id bigint;
+begin
+  insert into clinics(name, address, phone)
+  values (p_name, p_address, p_phone)
+  returning id into new_id;
+
+  insert into clinic_users (user_id, role, full_name, phone, clinic_id, status)
+  values (
+    auth.uid(),
+    'admin',
+    coalesce(p_admin_full_name, (auth.jwt() -> 'user_metadata' ->> 'full_name')),
+    coalesce(p_admin_phone, p_phone),
+    new_id,
+    'active'
+  )
+  on conflict (user_id) do update
+    set clinic_id = excluded.clinic_id,
+        role      = 'admin',
+        full_name = coalesce(excluded.full_name, clinic_users.full_name),
+        phone     = coalesce(excluded.phone, clinic_users.phone),
+        updated_at = now();
+
+  return new_id;
+end
+$$;
+
+grant execute on function create_clinic_and_admin(text, text, text, text, text) to authenticated;
 ```
 
 Files

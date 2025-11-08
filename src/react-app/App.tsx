@@ -1,8 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { useAuth } from '@/react-app/contexts/AuthContext';
-import { supabase } from './lib/supabaseClient';
+import AuthPage from '@/react-app/pages/AuthPage';
 
 // Page imports
 import DashboardPage from "./pages/Dashboard";
@@ -26,14 +24,7 @@ export default function App() {
           path="/"
           element={
             !session ? (
-              <div className="flex min-h-screen items-center justify-center">
-                <Auth
-                  supabaseClient={supabase}
-                  appearance={{ theme: ThemeSupa }}
-                  providers={['google']}
-                  redirectTo={`${window.location.origin}/dashboard`}
-                />
-              </div>
+              <AuthPage />
             ) : (
               <Navigate to="/dashboard" replace />
             )

@@ -2,9 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { Session } from '@supabase/supabase-js';
-import { UserRole } from '../../shared/types';
-
-const STAFF_ROLES: UserRole[] = ['admin', 'receptionist', 'doctor'];
 
 interface SetupProps {
   session: Session | null;
@@ -13,61 +10,43 @@ interface SetupProps {
 export default function Setup({ session }: SetupProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
   const [displayName, setDisplayName] = useState(
     session?.user?.user_metadata?.full_name ?? ''
   );
+  const [clinicName, setClinicName] = useState('');
+  const [clinicAddress, setClinicAddress] = useState('');
+  const [clinicPhone, setClinicPhone] = useState('');
   const navigate = useNavigate();
 
-  const createClinicUser = async () => {
+  const handleSetup = async () => {
     if (!session?.user) return;
     setLoading(true);
     setError(null);
 
     try {
-      // First, check if user already exists in clinic_users
+      // If already registered, go to dashboard
       const { data: existingUser } = await supabase
         .from('clinic_users')
         .select('id')
         .eq('user_id', session.user.id)
         .maybeSingle();
-
       if (existingUser) {
-        // User already exists, redirect to dashboard
         navigate('/dashboard');
         return;
       }
 
-      // Create a new clinic first
-      const { data: clinic, error: clinicError } = await supabase
-        .from('clinics')
-        .insert({
-          name: 'My Clinic', // You might want to add a clinic name field to the form
-          address: 'TBD'     // You might want to add address fields to the form
-        })
-        .select()
-        .single();
+      if (!clinicName.trim()) throw new Error('Clinic name is required');
 
-      if (clinicError) throw clinicError;
+      const { data, error: rpcError } = await supabase.rpc('create_clinic_and_admin', {
+        p_name: clinicName.trim(),
+        p_address: clinicAddress || null,
+        p_phone: clinicPhone || null,
+        p_admin_full_name: displayName || session.user.email,
+        p_admin_phone: clinicPhone || null,
+      });
+      if (rpcError) throw rpcError;
 
-      // Then create the clinic user as admin
-      // Note: not including `email` here because some DB deployments
-      // may not have an `email` column on clinic_users (causes 42703 errors).
-      const { error: userError } = await supabase
-        .from('clinic_users')
-        .insert({
-          user_id: session.user.id,
-          clinic_id: clinic.id,
-          role: selectedRole,
-          full_name: displayName || session.user.email,
-          status: 'active'
-        })
-        .select()
-        .single();
-
-      if (userError) throw userError;
-
-      // On success navigate to dashboard
+      // Success: redirect
       navigate('/dashboard');
     } catch (error: any) {
       console.error('Setup error:', error);
@@ -81,10 +60,10 @@ export default function Setup({ session }: SetupProps) {
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Complete your profile
+          Set up your clinic
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Set up your role in the clinic system
+          Create a clinic and become its administrator.
         </p>
       </div>
 
@@ -96,10 +75,10 @@ export default function Setup({ session }: SetupProps) {
             </div>
           )}
 
-          <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); createClinicUser(); }}>
+          <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleSetup(); }}>
             <div>
               <label htmlFor="display_name" className="block text-sm font-medium text-gray-700">
-                Full Name
+                Your Full Name
               </label>
               <div className="mt-1">
                 <input
@@ -115,38 +94,61 @@ export default function Setup({ session }: SetupProps) {
             </div>
 
             <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                Role
+              <label htmlFor="clinic_name" className="block text-sm font-medium text-gray-700">
+                Clinic Name
               </label>
               <div className="mt-1">
-                <select
-                  id="role"
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value as UserRole)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                <input
+                  type="text"
+                  id="clinic_name"
+                  value={clinicName}
+                  onChange={(e) => setClinicName(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="e.g., Sunrise Medical Center"
                   required
-                >
-                  {STAFF_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {role.charAt(0).toUpperCase() + role.slice(1)}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
-              <p className="mt-2 text-sm text-gray-500">
-                {selectedRole === 'admin' && "Full access to manage the clinic, staff, and patients"}
-                {selectedRole === 'receptionist' && "Schedule appointments and manage patient records"}
-                {selectedRole === 'doctor' && "Access to patient consultations and medical records"}
-              </p>
+            </div>
+
+            <div>
+              <label htmlFor="clinic_address" className="block text-sm font-medium text-gray-700">
+                Address (optional)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="text"
+                  id="clinic_address"
+                  value={clinicAddress}
+                  onChange={(e) => setClinicAddress(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="123 Example Street"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="clinic_phone" className="block text-sm font-medium text-gray-700">
+                Phone (optional)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="tel"
+                  id="clinic_phone"
+                  value={clinicPhone}
+                  onChange={(e) => setClinicPhone(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="+1 555 123 4567"
+                />
+              </div>
             </div>
 
             <div>
               <button
                 type="submit"
-                disabled={loading || !displayName}
+                disabled={loading || !displayName || !clinicName}
                 className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Setting up...' : 'Continue to Dashboard'}
+                {loading ? 'Creating clinic...' : 'Create Clinic'}
               </button>
             </div>
           </form>
