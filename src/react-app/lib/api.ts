@@ -2,6 +2,8 @@ export type ApiResponse<T> = T | { error?: string };
 
 import { supabase } from './supabaseClient';
 
+const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '';
+
 export async function apiFetch<T = any>(input: string, init?: RequestInit): Promise<T> {
   const session = await supabase.auth.getSession();
   const token = session.data.session?.access_token;
@@ -15,7 +17,8 @@ export async function apiFetch<T = any>(input: string, init?: RequestInit): Prom
     ...init,
   };
 
-  const res = await fetch(input, finalInit);
+  const url = API_BASE ? `${API_BASE}${input}` : input;
+  const res = await fetch(url, finalInit);
 
   // If unauthorized, redirect to home/login
   if (res.status === 401) {
