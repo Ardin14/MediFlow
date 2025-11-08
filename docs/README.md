@@ -13,6 +13,12 @@
 5. [System Architecture](#system-architecture)
 6. [Tech Stack](#tech-stack)
 7. [Project Structure](#project-structure)
+8. [How It Works](#how-it-works)
+9. [Staff Onboarding & Approval](#staff-onboarding--approval)
+10. [Roles & Permissions Matrix](#roles--permissions-matrix)
+11. [Data Flow End-to-End](#data-flow-end-to-end)
+12. [Configuration & Environment](#configuration--environment)
+13. [FAQ](#faq)
 
 ---
 
@@ -370,6 +376,119 @@ mediflow/
 - **Edge Computing** - Low latency worldwide
 - **Efficient Queries** - Optimized database access
 - **Code Splitting** - React Router lazy loading
+
+---
+
+## How It Works
+
+MediFlow is a multi-tenant clinic system. Each user belongs to exactly one clinic and only sees data for that clinic.
+
+High-level flow:
+- Authentication (Google via Mocha Users Service) creates an app user session.
+- First admin sets up a clinic (name, address, phone) and becomes that clinic’s admin.
+- Staff (receptionists, nurses, doctors) self-register by choosing from an existing clinic list. The list shows clinic name, address, and phone.
+- New staff accounts are created with status='pending'. They cannot access protected data until approved by the clinic admin.
+- Once approved (status='active'), role-based permissions unlock: patient operations, appointment scheduling/updates, billing, etc.
+
+Key guarantees:
+- Clinic isolation: all queries are filtered by clinic_id at the API level. Supabase RLS can also be applied to Supabase-resident tables.
+- Role-based access: the worker middleware enforces role checks per endpoint.
+- Pending approval: middleware blocks users whose status != 'active'.
+
+---
+
+## Staff Onboarding & Approval
+
+1) Admin creates a clinic
+- Go through Setup to create clinic details (name, address, phone). The creator becomes admin for that clinic.
+
+2) Staff self-register
+- Sign in and complete registration: choose a clinic from a list that shows name, address, and phone.
+- Pick role (Receptionist / Nurse / Doctor / Patient).
+- The system writes clinic_users with status='pending'.
+
+3) Approval
+- Admin visits Staff Management and sees pending staff.
+- Click Approve to set status to active.
+- Pending users are shown a Pending Approval screen and cannot use data endpoints.
+
+4) After approval
+- Receptionists: manage patients, appointments, billing.
+- Nurses: view/register patients; schedule/update appointments.
+- Doctors: view their appointments; record consultations; create prescriptions.
+- Patients: view their own records (when enabled).
+
+---
+
+## Roles & Permissions Matrix
+
+- Admin
+  - Full read/write for clinic, staff, patients, appointments, invoices, reports
+- Receptionist
+  - Patients: create/update
+  - Appointments: create/update
+  - Billing: create/update invoices
+- Nurse
+  - Patients: view/create/update
+  - Appointments: create/update (e.g., schedule, check-in, cancel)
+- Doctor
+  - Appointments: view (own only)
+  - Consultations/Visits: create
+  - Prescriptions: create
+- Patient
+  - Own health data: view (read-only)
+
+Notes:
+- Exact permissions are enforced by API middleware and can be extended with RLS on Supabase tables.
+
+---
+
+## Data Flow End-to-End
+
+- Frontend (React) → API (/api/* on Cloudflare Worker using Hono)
+- Auth middleware validates session and loads clinic user (including status and role)
+- Role guards (requireRole) and clinicUser checks enforce access
+- Database operations
+  - Cloudflare D1 (SQLite) for app data (patients, appointments, invoices, etc.)
+  - Supabase (Postgres) for authentication and authoritative staff status (clinic_users)
+- Responses returned to the frontend
+
+---
+
+## Configuration & Environment
+
+Required bindings/vars:
+- SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: used by the worker to read/write clinic_users and verify tokens
+- ALLOWED_ORIGIN (optional): CORS allowlist (comma-separated)
+- DB: Cloudflare D1 binding (SQLite)
+- RATE_LIMIT_KV (optional): KV namespace for rate-limiting
+
+Local development:
+- Node 20.19+ (or 22.12+) is required by Vite 7
+- npm install; npm run dev → http://localhost:5173
+
+Deployment:
+- npm run build → builds frontend and worker
+- npm run deploy (if configured) → deploys worker
+
+---
+
+## FAQ
+
+Q: Why do I see a Pending Approval screen after registering?
+- Your clinic admin must approve you. Ask the admin to open Staff Management and click Approve next to your name.
+
+Q: How does the clinic chooser work?
+- The app fetches /api/clinics and shows name, address, and phone so staff can pick the correct clinic.
+
+Q: Can nurses register patients and schedule appointments?
+- Yes. Nurses can create patients and create/update appointments (including status changes).
+
+Q: Why can’t I access any patient data after signing up?
+- Your status is likely 'pending'. Once the admin approves you (status='active'), data access will be enabled.
+
+Q: Where are permissions enforced?
+- At the worker API via middleware (requireRole/clinicUser checks). Supabase RLS can further protect Supabase tables.
 
 ---
 

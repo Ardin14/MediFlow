@@ -2,15 +2,12 @@ import path from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { cloudflare } from "@cloudflare/vite-plugin";
-import { mochaPlugins } from "@getmocha/vite-plugins";
 
 // Polyfill Web File in Node environments that lack it (e.g., Node < 20)
-// Some plugins may rely on globalThis.File during config evaluation.
-// Provide a minimal spec-compliant shim if missing.
+// Do this BEFORE importing any plugins that might import undici/fetch internally.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const g: any = globalThis as any;
 if (typeof g.File === "undefined") {
-  // Minimal File shim without DOM type dependencies
   class NodeFile {
     name: string;
     lastModified: number;
@@ -22,7 +19,6 @@ if (typeof g.File === "undefined") {
       this.name = String(name);
       this.lastModified = options?.lastModified ?? Date.now();
       this.type = options?.type ?? "";
-      // Approximate size; good enough for config-time checks
       this.size = this._parts.reduce((n, part) => {
         if (typeof part === 'string') return n + Buffer.byteLength(part);
         if (part && typeof part === 'object' && typeof part.size === 'number') return n + part.size;
@@ -32,6 +28,9 @@ if (typeof g.File === "undefined") {
   }
   g.File = NodeFile as unknown as typeof File;
 }
+
+// Import mocha plugins AFTER the polyfill so they can rely on global File
+import { mochaPlugins } from "@getmocha/vite-plugins";
 
 export default defineConfig({
   plugins: [...mochaPlugins(process.env as any), react(), cloudflare()],
