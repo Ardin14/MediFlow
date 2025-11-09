@@ -1,7 +1,7 @@
 import path from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { cloudflare } from "@cloudflare/vite-plugin";
+// Cloudflare plugin removed while migrating to Supabase-only backend
 
 // Polyfill Web File in Node environments that lack it (e.g., Node < 20)
 // Do this BEFORE importing any plugins that might import undici/fetch internally.
@@ -33,7 +33,7 @@ if (typeof g.File === "undefined") {
 import { mochaPlugins } from "@getmocha/vite-plugins";
 
 export default defineConfig({
-  plugins: [...mochaPlugins(process.env as any), react(), cloudflare()],
+  plugins: [...mochaPlugins(process.env as any), react()],
   server: {
     allowedHosts: true,
   },
