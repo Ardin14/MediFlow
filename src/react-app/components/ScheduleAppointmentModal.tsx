@@ -141,7 +141,7 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
                   {doctor.full_name}
                 </option>
               ))}
-            </select
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
