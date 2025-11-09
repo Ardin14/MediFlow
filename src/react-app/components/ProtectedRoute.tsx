@@ -22,7 +22,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!clinicUser) {
-    return <Navigate to="/setup" replace />;
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  if (clinicUser && (clinicUser as any).status && (clinicUser as any).status !== 'active') {
+    return <Navigate to="/pending-approval" replace />;
   }
 
   return <>{children}</>;

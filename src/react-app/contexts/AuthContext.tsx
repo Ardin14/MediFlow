@@ -9,6 +9,7 @@ interface ClinicUser {
   full_name: string;
   clinic_id: number;
   clinic_name?: string;
+  status?: 'active' | 'inactive' | 'pending';
 }
 
 interface AuthContextType {
@@ -51,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: clinicUserData, error } = await supabase
           .from('clinic_users')
           .select(
-            `id,user_id,role,full_name,clinic_id,clinic:clinics(id,name)`
+            `id,user_id,role,full_name,status,clinic_id,clinic:clinics(id,name)`
           )
           .eq('user_id', userId)
           .maybeSingle();
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             full_name: (clinicUserData as any).full_name,
             clinic_id: (clinicUserData as any).clinic_id,
             clinic_name: clinic?.name,
+            status: (clinicUserData as any).status,
           });
         } else {
           console.log('No clinic user found');

@@ -14,6 +14,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import SetupPage from "./pages/Setup";
 import SetupExistingGuard from "./components/SetupExistingGuard";
 import StaffManagementPage from "./pages/StaffManagement";
+import OnboardingPage from "./pages/Onboarding";
+import JoinClinicPage from "./pages/JoinClinic";
+import PendingApprovalPage from "./pages/PendingApproval";
 
 export default function App() {
   const { session } = useAuth();
@@ -37,6 +40,37 @@ export default function App() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/onboarding"
+          element={
+            session ? (
+              <OnboardingPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+
+        <Route
+          path="/join-clinic"
+          element={
+            session ? (
+              <JoinClinicPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+
+        <Route
+          path="/pending-approval"
+          element={
+            <ProtectedRoute>
+              <PendingApprovalPage />
             </ProtectedRoute>
           }
         />
