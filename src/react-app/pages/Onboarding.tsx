@@ -1,10 +1,10 @@
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Building2, Users } from 'lucide-react';
+import { Building2, Users, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/react-app/contexts/AuthContext';
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { clinicUser, isLoading } = useAuth();
+  const { clinicUser, isLoading, signOut } = useAuth();
 
   if (isLoading) {
     return (
@@ -24,7 +24,15 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="max-w-3xl w-full bg-white shadow-sm rounded-2xl p-8 border border-gray-100">
-        <h1 className="text-2xl font-bold text-gray-900 text-center">Welcome! How would you like to get started?</h1>
+        <div className="flex justify-between items-center">
+          <button
+            onClick={async () => { await signOut(); navigate('/'); }}
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back to Home
+          </button>
+        </div>
+        <h1 className="text-2xl font-bold text-gray-900 text-center mt-1">Welcome! How would you like to get started?</h1>
         <p className="text-gray-600 text-center mt-2">Choose one of the options below to continue.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
           <button
