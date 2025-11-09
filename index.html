@@ -26,17 +26,10 @@
       content="https://mocha-cdn.com/og.png"
       type="image/png"
     />
-    <link
-      rel="shortcut icon"
-      href="https://mocha-cdn.com/favicon.ico"
-      type="image/x-icon"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="https://mocha-cdn.com/apple-touch-icon.png"
-      type="image/png"
-    />
+    <!-- Use local favicons so Vercel serves them and we avoid 404s. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="shortcut icon" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <title>MediFlow - Clinical Management System</title>
   </head>
   <body>
