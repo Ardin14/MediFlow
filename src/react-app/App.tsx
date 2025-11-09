@@ -69,9 +69,11 @@ export default function App() {
         <Route
           path="/pending-approval"
           element={
-            <ProtectedRoute>
+            session ? (
               <PendingApprovalPage />
-            </ProtectedRoute>
+            ) : (
+              <Navigate to="/" replace />
+            )
           }
         />
 

@@ -18,8 +18,11 @@ export default function SetupExistingGuard({ children }: SetupExistingGuardProps
     );
   }
 
-  // If user already has a clinic setup, redirect to dashboard
+  // If user already has a clinic membership
   if (clinicUser) {
+    if ((clinicUser as any).status && (clinicUser as any).status !== 'active') {
+      return <Navigate to="/pending-approval" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 
