@@ -3,6 +3,7 @@ import Layout from '@/react-app/components/Layout';
 import { supabase } from '../lib/supabaseClient';
 import { Plus, Mail, AlertTriangle, CheckCircle } from 'lucide-react';
 import { generateSecurePassword } from '../utils/password';
+import { useAuth } from '@/react-app/contexts/AuthContext';
 
 interface StaffMember {
   id: string;
@@ -189,20 +190,19 @@ function AddStaffModal({ isOpen, onClose, onStaffAdded, clinicId }: AddStaffModa
 }
 
 export default function StaffManagement() {
-  const [clinicUser, setClinicUser] = useState<any>(null);
+  const { clinicUser } = useAuth();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const fetchData = async () => {
     try {
-      const userData = await supabase.from('clinic_users').select('*').single();
-      setClinicUser(userData.data);
+      if (!clinicUser?.clinic_id) return;
 
       const { data: staffData } = await supabase
         .from('clinic_users')
         .select('*')
-        .eq('clinic_id', userData.data.clinic_id);
+        .eq('clinic_id', clinicUser.clinic_id);
 
       setStaff(staffData || []);
     } catch (error) {
@@ -214,7 +214,8 @@ export default function StaffManagement() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // refetch when clinic context changes
+  }, [clinicUser?.clinic_id]);
 
   const resendInvite = async (staffMember: StaffMember) => {
     try {
@@ -270,6 +271,18 @@ export default function StaffManagement() {
       <Layout>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (clinicUser?.role !== 'admin') {
+    return (
+      <Layout>
+        <div className="p-6">
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4">
+            You do not have permission to manage staff.
+          </div>
         </div>
       </Layout>
     );
@@ -385,7 +398,7 @@ export default function StaffManagement() {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onStaffAdded={fetchData}
-          clinicId={clinicUser?.clinic_id}
+          clinicId={clinicUser?.clinic_id as number}
         />
       </div>
     </Layout>

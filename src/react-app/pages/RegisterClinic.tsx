@@ -84,8 +84,8 @@ export default function RegisterClinic() {
 
       if (staffError) throw staffError;
 
-      // 4. Move to success step
-      setStep(3);
+      // 4. Redirect admin to dashboard home screen on success
+      navigate('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to register clinic');
     } finally {

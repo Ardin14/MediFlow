@@ -13,6 +13,7 @@ import ReportsPage from "./pages/Reports";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SetupPage from "./pages/Setup";
 import SetupExistingGuard from "./components/SetupExistingGuard";
+import StaffManagementPage from "./pages/StaffManagement";
 
 export default function App() {
   const { session } = useAuth();
@@ -103,6 +104,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ReportsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff"
+          element={
+            <ProtectedRoute>
+              <StaffManagementPage />
             </ProtectedRoute>
           }
         />

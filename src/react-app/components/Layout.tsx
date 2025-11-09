@@ -13,7 +13,8 @@ import {
   LogOut,
   User,
   Building2,
-  Shield
+  Shield,
+  Users as UsersIcon
 } from "lucide-react";
 
 interface LayoutProps {
@@ -36,19 +37,19 @@ export default function Layout({ children }: LayoutProps) {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
-      roles: ["admin", "receptionist", "doctor", "patient"]
+      roles: ["admin", "receptionist", "doctor", "nurse", "patient"]
     },
     {
       name: "Patients",
       href: "/patients",
       icon: Users,
-      roles: ["admin", "receptionist", "doctor"]
+      roles: ["admin", "receptionist", "doctor", "nurse"]
     },
     {
       name: "Appointments",
       href: "/appointments",
       icon: Calendar,
-      roles: ["admin", "receptionist", "doctor", "patient"]
+      roles: ["admin", "receptionist", "doctor", "nurse", "patient"]
     },
     {
       name: "Billing",
@@ -60,6 +61,12 @@ export default function Layout({ children }: LayoutProps) {
       name: "Reports",
       href: "/reports",
       icon: BarChart3,
+      roles: ["admin"]
+    },
+    {
+      name: "Staff",
+      href: "/staff",
+      icon: UsersIcon,
       roles: ["admin"]
     }
   ];
