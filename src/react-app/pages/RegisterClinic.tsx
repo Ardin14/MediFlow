@@ -70,7 +70,6 @@ export default function RegisterClinic() {
       if (authError) throw authError;
 
       // 3. Create clinic_user record for admin
-      // Avoid inserting `email` into clinic_users because some DBs may not have that column.
       const { error: staffError } = await supabase
         .from('clinic_users')
         .insert({
@@ -78,6 +77,7 @@ export default function RegisterClinic() {
           clinic_id: clinic.id,
           role: 'admin',
           full_name: form.adminFullName,
+          email: form.adminEmail,
           phone: form.adminPhone,
           status: 'active'
         });

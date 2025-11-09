@@ -47,42 +47,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchClinicUser = async (userId: string) => {
       console.log('Fetching clinic user for userId:', userId);
       try {
-        // Only select columns that exist on clinic_users table.
-        // Removed `email` and `phone` which caused Postgres 42703 errors.
-        const { data: clinicUserData, error } = await supabase
+        const selectCols = `id,user_id,role,full_name,status,clinic_id,clinic:clinics(id,name)`;
+
+        // 1) Try by user_id first
+        const { data: byUser, error: byUserErr } = await supabase
           .from('clinic_users')
-          .select(
-            `id,user_id,role,full_name,status,clinic_id,clinic:clinics(id,name)`
-          )
+          .select(selectCols)
           .eq('user_id', userId)
           .maybeSingle();
 
-        console.log('Clinic user query result:', { clinicUserData, error });
-
-        if (error) {
-          console.error('Supabase error fetching clinic_user:', {
-            code: (error as any)?.code,
-            message: (error as any)?.message,
-            details: (error as any)?.details,
-            hint: (error as any)?.hint,
-          });
-          throw error;
+        if (byUserErr) {
+          console.error('Supabase error fetching clinic_user by user_id:', byUserErr);
         }
 
-        if (clinicUserData) {
-          console.log('Setting clinic user:', clinicUserData);
-          const clinic = Array.isArray((clinicUserData as any).clinic)
-            ? (clinicUserData as any).clinic[0]
-            : (clinicUserData as any).clinic;
+        let row: any = byUser ?? null;
+
+        // 2) If not found, try by email (pre-provisioned staff)
+        if (!row) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const email = sessionData.session?.user?.email || '';
+          if (email) {
+            const { data: byEmail, error: byEmailErr } = await supabase
+              .from('clinic_users')
+              .select(selectCols + ',email')
+              .eq('email', email)
+              .maybeSingle();
+
+            if (byEmailErr) {
+              console.error('Supabase error fetching clinic_user by email:', byEmailErr);
+            }
+
+            if (byEmail) {
+              // Attempt to claim this row by setting user_id
+              if (!(byEmail as any).user_id) {
+                const { error: claimErr } = await supabase
+                  .from('clinic_users')
+                  .update({ user_id: userId })
+                  .eq('id', (byEmail as any).id);
+                if (claimErr) {
+                  console.error('Error claiming pre-provisioned clinic_user:', claimErr);
+                } else {
+                  // Re-fetch by user_id to get joined clinic alias consistency
+                  const { data: re } = await supabase
+                    .from('clinic_users')
+                    .select(selectCols)
+                    .eq('user_id', userId)
+                    .maybeSingle();
+                  row = re ?? byEmail;
+                }
+              } else {
+                row = byEmail;
+              }
+            }
+          }
+        }
+
+        if (row) {
+          console.log('Setting clinic user:', row);
+          const clinic = Array.isArray((row as any).clinic)
+            ? (row as any).clinic[0]
+            : (row as any).clinic;
 
           setClinicUser({
-            id: (clinicUserData as any).id,
-            user_id: (clinicUserData as any).user_id,
-            role: (clinicUserData as any).role,
-            full_name: (clinicUserData as any).full_name,
-            clinic_id: (clinicUserData as any).clinic_id,
+            id: (row as any).id,
+            user_id: (row as any).user_id,
+            role: (row as any).role,
+            full_name: (row as any).full_name,
+            clinic_id: (row as any).clinic_id,
             clinic_name: clinic?.name,
-            status: (clinicUserData as any).status,
+            status: (row as any).status,
           });
         } else {
           console.log('No clinic user found');

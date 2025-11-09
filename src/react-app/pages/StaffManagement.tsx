@@ -54,8 +54,7 @@ function AddStaffModal({ isOpen, onClose, onStaffAdded, clinicId }: AddStaffModa
 
       if (authError) throw authError;
 
-      // 2. Create clinic_user record
-      // Avoid inserting `email` directly into clinic_users to support DBs without that column.
+      // 2. Create clinic_user record with email for pre-provisioning/lookup
       const { error: staffError } = await supabase
         .from('clinic_users')
         .insert({
@@ -63,6 +62,7 @@ function AddStaffModal({ isOpen, onClose, onStaffAdded, clinicId }: AddStaffModa
           clinic_id: clinicId,
           role: form.role,
           full_name: form.fullName,
+          email: form.email,
           phone: form.phone,
           status: 'pending'
         });

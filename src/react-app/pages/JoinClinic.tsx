@@ -39,6 +39,7 @@ export default function JoinClinic() {
         clinic_id: clinicId,
         role,
         full_name: user.user_metadata?.full_name || user.email,
+        email: user.email,
         phone: phone || null,
         status: 'pending'
       });
