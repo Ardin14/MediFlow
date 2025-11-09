@@ -1,12 +1,21 @@
+/// <reference path="../types.d.ts" />
+// Editor may still complain about remote imports in a Node/TS workspace — ignore those
+// so the function file remains clean in the editor while still working at runtime.
+// @ts-ignore: remote import
 import { serve } from 'https://deno.fresh.dev/std/http/server.ts';
+// @ts-ignore: remote import
 import { createClient } from 'https://esm.sh/@supabase/supabase-js';
+
+// If the ambient Deno declaration isn't picked up by the editor, provide a fallback
+// to silence diagnostics. This does not affect runtime in the Supabase/Deno environment.
+declare const Deno: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
