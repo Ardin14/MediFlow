@@ -1,8 +1,26 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { Building2, Users } from 'lucide-react';
+import { useAuth } from '@/react-app/contexts/AuthContext';
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const { clinicUser, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (clinicUser) {
+    if ((clinicUser as any).status && (clinicUser as any).status !== 'active') {
+      return <Navigate to="/pending-approval" replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="max-w-3xl w-full bg-white shadow-sm rounded-2xl p-8 border border-gray-100">
