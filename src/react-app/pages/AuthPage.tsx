@@ -10,6 +10,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +38,7 @@ export default function AuthPage() {
       }
     } catch (err: any) {
       setError(err?.message || 'Authentication failed');
+      setErrorCode(err?.code || err?.status || null);
     } finally {
       setLoading(false);
     }
@@ -117,7 +119,27 @@ export default function AuthPage() {
               </div>
 
               {error && (
-                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2 rounded-lg">{error}</div>
+                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2 rounded-lg">
+                  {error}
+                  {errorCode === 'email_not_confirmed' && (
+                    <div className="mt-3 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={async () => { await supabase.auth.resend({ type: 'signup', email }); setMessage('Confirmation email resent. Check your inbox.'); }}
+                        className="text-blue-700 hover:underline"
+                      >
+                        Resend confirmation email
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => { await supabase.auth.signInWithOtp({ email }); setMessage('Magic link sent. Check your email.'); }}
+                        className="text-blue-700 hover:underline"
+                      >
+                        Send magic link
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
               {message && (
                 <div className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2 rounded-lg">{message}</div>
