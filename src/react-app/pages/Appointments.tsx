@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Layout from "@/react-app/components/Layout";
 import ScheduleAppointmentModal from "@/react-app/components/ScheduleAppointmentModal";
 import { Plus, Calendar, Clock, User } from "lucide-react";
-import { apiFetch } from "@/react-app/lib/api";
+import { supabase } from "@/react-app/lib/supabaseClient";
 
 export default function Appointments() {
   const [clinicUser, setClinicUser] = useState<any>(null);
@@ -12,11 +12,65 @@ export default function Appointments() {
 
   const fetchData = async () => {
     try {
-      const userData = await apiFetch<any>("/api/users/me");
-      setClinicUser(userData.clinicUser);
+      // Load current user and clinic user
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id;
+      let clinicUserRow: any = null;
+      if (userId) {
+        const { data } = await supabase
+          .from('clinic_users')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+        clinicUserRow = data;
+        setClinicUser(data);
+      }
 
-      const appointmentsData = await apiFetch<any[]>("/api/appointments");
-      setAppointments(appointmentsData || []);
+      if (!clinicUserRow?.clinic_id) {
+        setAppointments([]);
+        return;
+      }
+
+      // Base query for appointments in this clinic
+      let apptQuery = supabase
+        .from('appointments')
+        .select('*')
+        .eq('clinic_id', clinicUserRow.clinic_id)
+        .order('appointment_date', { ascending: false });
+
+      // If doctor, limit to own appointments when possible
+      if (clinicUserRow.role === 'doctor') {
+        apptQuery = apptQuery.eq('doctor_id', clinicUserRow.id);
+      }
+
+      const { data: appts, error: apptErr } = await apptQuery;
+      if (apptErr) throw apptErr;
+
+      const list = appts || [];
+
+      // Enrich with names (patient, doctor)
+      const patientIds = Array.from(new Set(list.map((a: any) => a.patient_id).filter(Boolean)));
+      const doctorIds = Array.from(new Set(list.map((a: any) => a.doctor_id).filter(Boolean)));
+
+      const [patientsRes, doctorsRes] = await Promise.all([
+        patientIds.length
+          ? supabase.from('patients').select('id, full_name').in('id', patientIds)
+          : Promise.resolve({ data: [] } as any),
+        doctorIds.length
+          ? supabase.from('clinic_users').select('id, full_name').in('id', doctorIds)
+          : Promise.resolve({ data: [] } as any),
+      ]);
+
+      const patientsMap = new Map((patientsRes.data || []).map((p: any) => [p.id, p.full_name]));
+      const doctorsMap = new Map((doctorsRes.data || []).map((d: any) => [d.id, d.full_name]));
+
+      const withNames = list.map((a: any) => ({
+        ...a,
+        patient_name: patientsMap.get(a.patient_id) || 'Unknown',
+        doctor_name: doctorsMap.get(a.doctor_id) || '—',
+      }));
+
+      setAppointments(withNames);
     } catch (error) {
       console.error("Error fetching appointments:", error);
     } finally {
@@ -51,15 +105,15 @@ export default function Appointments() {
 
   const updateStatus = async (id: number, status: string) => {
     try {
-      await apiFetch(`/api/appointments/${id}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ status }),
-        headers: { "Content-Type": "application/json" },
-      });
+      if (!clinicUser?.clinic_id) return;
+      await supabase
+        .from('appointments')
+        .update({ status })
+        .eq('id', id)
+        .eq('clinic_id', clinicUser.clinic_id);
       fetchData();
     } catch (err) {
       console.error("Failed to update status", err);
-      // optional: show a toast
     }
   };
 
@@ -152,6 +206,7 @@ export default function Appointments() {
           isOpen={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
           onAppointmentScheduled={handleAppointmentScheduled}
+          clinicId={clinicUser?.clinic_id}
         />
       </div>
     </Layout>

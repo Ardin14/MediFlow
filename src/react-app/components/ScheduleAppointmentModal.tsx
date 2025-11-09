@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
+import { supabase } from "@/react-app/lib/supabaseClient";
+
 interface ScheduleAppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAppointmentScheduled: () => void;
+  clinicId?: number;
 }
 
-export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmentScheduled }: ScheduleAppointmentModalProps) {
+export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmentScheduled, clinicId }: ScheduleAppointmentModalProps) {
   const [formData, setFormData] = useState({
     patient_id: "",
     doctor_id: "",
@@ -15,32 +18,25 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
     appointment_time: "",
     reason: ""
   });
-  const [patients, setPatients] = useState([]);
-  const [doctors, setDoctors] = useState([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (isOpen) {
-      fetchPatientsAndDoctors();
+    if (isOpen && typeof clinicId === 'number') {
+      fetchPatientsAndDoctors(clinicId);
     }
-  }, [isOpen]);
+  }, [isOpen, clinicId]);
 
-  const fetchPatientsAndDoctors = async () => {
+  const fetchPatientsAndDoctors = async (cid: number) => {
     try {
-      // Fetch patients
-      const patientsResponse = await fetch("/api/patients");
-      const patientsData = await patientsResponse.json();
-      setPatients(patientsData);
-
-      // For doctors, we need to get clinic users with doctor role
-      // Since we don't have a direct endpoint, we'll need to add one or use a workaround
-      // For now, let's assume we'll fetch from clinic_users
-      const doctorsResponse = await fetch("/api/clinic-users/doctors");
-      if (doctorsResponse.ok) {
-        const doctorsData = await doctorsResponse.json();
-        setDoctors(doctorsData);
-      }
+      const [{ data: p }, { data: d }] = await Promise.all([
+        supabase.from('patients').select('id, full_name').eq('clinic_id', cid).order('full_name'),
+        supabase.from('clinic_users').select('id, full_name').eq('role', 'doctor').eq('clinic_id', cid).order('full_name'),
+      ]);
+      setPatients(p || []);
+      setDoctors(d || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -52,35 +48,24 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
     setError("");
 
     try {
-      // Combine date and time for the appointment_date field
+      if (typeof clinicId !== 'number') throw new Error('Missing clinic context');
+
       const appointmentDateTime = `${formData.appointment_date}T${formData.appointment_time}:00`;
 
-      const response = await fetch("/api/appointments", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          patient_id: parseInt(formData.patient_id),
-          doctor_id: formData.doctor_id,
+      const { error } = await supabase
+        .from('appointments')
+        .insert({
+          clinic_id: clinicId,
+          patient_id: parseInt(formData.patient_id, 10),
+          doctor_id: parseInt(formData.doctor_id, 10),
           appointment_date: appointmentDateTime,
-          reason: formData.reason
-        }),
-      });
+          reason: formData.reason || null,
+          status: 'booked'
+        } as any);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to schedule appointment");
-      }
+      if (error) throw error;
 
-      // Reset form and close modal
-      setFormData({
-        patient_id: "",
-        doctor_id: "",
-        appointment_date: "",
-        appointment_time: "",
-        reason: ""
-      });
+      setFormData({ patient_id: "", doctor_id: "", appointment_date: "", appointment_time: "", reason: "" });
       onAppointmentScheduled();
       onClose();
     } catch (error) {
@@ -152,11 +137,11 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
             >
               <option value="">Select a doctor</option>
               {doctors.map((doctor: any) => (
-                <option key={doctor.user_id} value={doctor.user_id}>
+                <option key={doctor.id} value={doctor.id}>
                   {doctor.full_name}
                 </option>
               ))}
-            </select>
+            </select
           </div>
 
           <div className="grid grid-cols-2 gap-4">
