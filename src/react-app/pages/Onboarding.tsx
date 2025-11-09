@@ -28,7 +28,7 @@ export default function Onboarding() {
               <Users className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900">I work at a clinic</h3>
-            <p className="text-sm text-gray-600 mt-1">Join an existing clinic as a doctor, nurse, receptionist, or patient.</p>
+            <p className="text-sm text-gray-600 mt-1">Join an existing clinic as a doctor, nurse, or receptionist.</p>
           </button>
         </div>
       </div>

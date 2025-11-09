@@ -8,7 +8,7 @@ export default function JoinClinic() {
   const [clinics, setClinics] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [role, setRole] = useState<'doctor' | 'nurse' | 'receptionist' | 'patient'>('patient');
+  const [role, setRole] = useState<'doctor' | 'nurse' | 'receptionist'>('doctor');
   const [clinicId, setClinicId] = useState<number | null>(null);
   const [phone, setPhone] = useState('');
 
@@ -90,7 +90,6 @@ export default function JoinClinic() {
               onChange={(e) => setRole(e.target.value as any)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="patient">Patient</option>
               <option value="doctor">Doctor</option>
               <option value="nurse">Nurse</option>
               <option value="receptionist">Receptionist</option>
