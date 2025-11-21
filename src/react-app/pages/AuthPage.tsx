@@ -30,10 +30,19 @@ export default function AuthPage() {
           options: { data: { full_name: fullName } }
         });
         if (error) throw error;
-        if (data.session) {
-          window.location.href = '/dashboard';
-        } else {
+        
+        // Check if user already exists but is not confirmed
+        // Supabase returns a user object but no session if email is not confirmed
+        if (data.user && !data.session) {
+          // If the user ID exists and identities array is empty, the email is already registered
+          if (data.user.identities && data.user.identities.length === 0) {
+            throw new Error('This email is already registered. Please sign in or reset your password if you forgot it.');
+          }
+          // Otherwise, it's a new signup waiting for email confirmation
           setMessage('Check your email to confirm your account, then sign in.');
+        } else if (data.session) {
+          // Auto-confirm is enabled, user can proceed directly
+          window.location.href = '/dashboard';
         }
       }
     } catch (err: any) {

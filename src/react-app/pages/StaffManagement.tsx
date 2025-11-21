@@ -53,6 +53,11 @@ function AddStaffModal({ isOpen, onClose, onStaffAdded, clinicId }: AddStaffModa
       });
 
       if (authError) throw authError;
+      
+      // Check if email already exists
+      if (auth.user && auth.user.identities && auth.user.identities.length === 0) {
+        throw new Error('This email is already registered. Please use a different email address or contact the user directly.');
+      }
 
       // 2. Create clinic_user record with email for pre-provisioning/lookup
       const { error: staffError } = await supabase

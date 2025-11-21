@@ -68,6 +68,11 @@ export default function RegisterClinic() {
       });
 
       if (authError) throw authError;
+      
+      // Check if email already exists
+      if (auth.user && auth.user.identities && auth.user.identities.length === 0) {
+        throw new Error('This email is already registered. Please use a different email address.');
+      }
 
       // 3. Create clinic_user record for admin
       const { error: staffError } = await supabase
