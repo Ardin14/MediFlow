@@ -36,7 +36,8 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
       // Query Supabase directly, filtered by clinic_id
       const [patientsResult, doctorsResult] = await Promise.all([
         supabase.from('patients').select('id, full_name').eq('clinic_id', cid).order('full_name'),
-        supabase.from('clinic_users').select('id, user_id, full_name').eq('role', 'doctor').eq('clinic_id', cid).order('full_name'),
+         // Always select the numeric primary key `id` for clinic_users so we can store it consistently in appointments.doctor_id
+         supabase.from('clinic_users').select('id, full_name').eq('role', 'doctor').eq('clinic_id', cid).order('full_name'),
       ]);
 
       console.log('Patients result:', patientsResult);
@@ -84,7 +85,8 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
         .insert({
           clinic_id: clinicId,
           patient_id: parseInt(formData.patient_id, 10),
-          doctor_id: formData.doctor_id, // This is the user_id (UUID string)
+           // Store the numeric clinic_users.id to match FK expectations (avoid mixing UUID user_id)
+           doctor_id: parseInt(formData.doctor_id, 10),
           appointment_date: appointmentDateTime,
           reason: formData.reason || null,
           status: 'booked'
@@ -164,7 +166,7 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
             >
               <option value="">Select a doctor</option>
               {doctors.map((doctor: any) => (
-                <option key={doctor.id || doctor.user_id} value={doctor.id || doctor.user_id}>
+                 <option key={doctor.id} value={doctor.id}>
                   {doctor.full_name}
                 </option>
               ))}
