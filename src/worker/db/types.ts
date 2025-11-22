@@ -532,8 +532,9 @@ export interface Database {
         }
       }
     }
-    Views: {}
-    Functions: {}
-    Enums: {}
+    // Explicit empty registries using Record<string, never> to satisfy lint rules
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
   }
 }
