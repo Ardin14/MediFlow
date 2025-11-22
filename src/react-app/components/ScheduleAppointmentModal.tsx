@@ -31,17 +31,11 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
 
   const fetchPatientsAndDoctors = async (cid: number) => {
     try {
-      console.log('Fetching patients and doctors for clinic:', cid);
-      
       // Query Supabase directly, filtered by clinic_id
       const [patientsResult, doctorsResult] = await Promise.all([
         supabase.from('patients').select('id, full_name').eq('clinic_id', cid).order('full_name'),
-         // Always select the numeric primary key `id` for clinic_users so we can store it consistently in appointments.doctor_id
-         supabase.from('clinic_users').select('id, full_name').eq('role', 'doctor').eq('clinic_id', cid).order('full_name'),
+        supabase.from('clinic_users').select('id, full_name').eq('role', 'doctor').eq('clinic_id', cid).order('full_name'),
       ]);
-
-      console.log('Patients result:', patientsResult);
-      console.log('Doctors result:', doctorsResult);
 
       if (patientsResult.error) {
         console.error('Error fetching patients:', patientsResult.error);
