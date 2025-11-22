@@ -31,14 +31,40 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
 
   const fetchPatientsAndDoctors = async (cid: number) => {
     try {
-      const [{ data: p }, { data: d }] = await Promise.all([
+      console.log('Fetching patients and doctors for clinic:', cid);
+      
+      // Query Supabase directly, filtered by clinic_id
+      const [patientsResult, doctorsResult] = await Promise.all([
         supabase.from('patients').select('id, full_name').eq('clinic_id', cid).order('full_name'),
-        supabase.from('clinic_users').select('id, full_name').eq('role', 'doctor').eq('clinic_id', cid).order('full_name'),
+        supabase.from('clinic_users').select('id, user_id, full_name').eq('role', 'doctor').eq('clinic_id', cid).order('full_name'),
       ]);
-      setPatients(p || []);
-      setDoctors(d || []);
+
+      console.log('Patients result:', patientsResult);
+      console.log('Doctors result:', doctorsResult);
+
+      if (patientsResult.error) {
+        console.error('Error fetching patients:', patientsResult.error);
+        setError(`Failed to load patients: ${patientsResult.error.message}`);
+      }
+
+      if (doctorsResult.error) {
+        console.error('Error fetching doctors:', doctorsResult.error);
+        setError(`Failed to load doctors: ${doctorsResult.error.message}`);
+      }
+
+      setPatients(patientsResult.data || []);
+      setDoctors(doctorsResult.data || []);
+
+      if ((patientsResult.data || []).length === 0) {
+        setError('No patients found in this clinic. Please add patients first.');
+      }
+      if ((doctorsResult.data || []).length === 0) {
+        setError('No doctors found in this clinic. Please add doctors first.');
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to load patients and doctors";
+      setError(`Failed to load data: ${errorMessage}`);
     }
   };
 
@@ -52,16 +78,17 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
 
       const appointmentDateTime = `${formData.appointment_date}T${formData.appointment_time}:00`;
 
+      // Insert directly into Supabase appointments table
       const { error } = await supabase
         .from('appointments')
         .insert({
           clinic_id: clinicId,
           patient_id: parseInt(formData.patient_id, 10),
-          doctor_id: parseInt(formData.doctor_id, 10),
+          doctor_id: formData.doctor_id, // This is the user_id (UUID string)
           appointment_date: appointmentDateTime,
           reason: formData.reason || null,
           status: 'booked'
-        } as any);
+        });
 
       if (error) throw error;
 
@@ -137,7 +164,7 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
             >
               <option value="">Select a doctor</option>
               {doctors.map((doctor: any) => (
-                <option key={doctor.id} value={doctor.id}>
+                <option key={doctor.id || doctor.user_id} value={doctor.id || doctor.user_id}>
                   {doctor.full_name}
                 </option>
               ))}

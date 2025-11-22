@@ -36,6 +36,14 @@ export default defineConfig({
   plugins: [...mochaPlugins(process.env as any), react()],
   server: {
     allowedHosts: true,
+    proxy: {
+      // Proxy /api requests to the local Cloudflare Worker (wrangler dev)
+      // Start worker with: npm run dev:worker (or wrangler dev)
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     chunkSizeWarningLimit: 5000,
