@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -7,6 +7,7 @@ interface AddPatientModalProps {
   onClose: () => void;
   onPatientAdded: () => void;
   clinicId: number;
+  editingPatient?: any;
 }
 
 export default function AddPatientModal({
@@ -14,24 +15,62 @@ export default function AddPatientModal({
   onClose,
   onPatientAdded,
   clinicId,
+  editingPatient,
 }: AddPatientModalProps) {
   const [formData, setFormData] = useState({
-    full_name: "",
-    gender: "",
-    date_of_birth: "",
-    phone: "",
-    email: "",
-    address: "",
-    medical_history: "",
-    blood_type: "",
-    allergies: "",
-    emergency_contact: "",
-    insurance_provider: "",
-    insurance_number: "",
+    full_name: editingPatient?.full_name || "",
+    gender: editingPatient?.gender || "",
+    date_of_birth: editingPatient?.date_of_birth || "",
+    phone: editingPatient?.phone || "",
+    email: editingPatient?.email || "",
+    address: editingPatient?.address || "",
+    medical_history: editingPatient?.medical_history || "",
+    blood_type: editingPatient?.blood_type || "",
+    allergies: editingPatient?.allergies || "",
+    emergency_contact: editingPatient?.emergency_contact || "",
+    insurance_provider: editingPatient?.insurance_provider || "",
+    insurance_number: editingPatient?.insurance_number || "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const errorRef = useRef<HTMLDivElement | null>(null);
+
+  // Update form data when editingPatient changes
+  useEffect(() => {
+    if (editingPatient) {
+      setFormData({
+        full_name: editingPatient.full_name || "",
+        gender: editingPatient.gender || "",
+        date_of_birth: editingPatient.date_of_birth || "",
+        phone: editingPatient.phone || "",
+        email: editingPatient.email || "",
+        address: editingPatient.address || "",
+        medical_history: editingPatient.medical_history || "",
+        blood_type: editingPatient.blood_type || "",
+        allergies: editingPatient.allergies || "",
+        emergency_contact: editingPatient.emergency_contact || "",
+        insurance_provider: editingPatient.insurance_provider || "",
+        insurance_number: editingPatient.insurance_number || "",
+      });
+    } else {
+      // Reset form when adding new patient
+      setFormData({
+        full_name: "",
+        gender: "",
+        date_of_birth: "",
+        phone: "",
+        email: "",
+        address: "",
+        medical_history: "",
+        blood_type: "",
+        allergies: "",
+        emergency_contact: "",
+        insurance_provider: "",
+        insurance_number: "",
+      });
+    }
+    setError("");
+  }, [editingPatient, isOpen]);
 
   const validateForm = () => {
     if (!formData.full_name.trim()) {
@@ -67,18 +106,32 @@ export default function AddPatientModal({
     try {
       validateForm();
 
-      const { error: insertError } = await supabase
-        .from("patients")
-        .insert({
-          ...formData,
-          clinic_id: clinicId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+      if (editingPatient) {
+        // Update existing patient
+        const { error: updateError } = await supabase
+          .from("patients")
+          .update({
+            ...formData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingPatient.id);
 
-      if (insertError) throw insertError;
+        if (updateError) throw updateError;
+      } else {
+        // Insert new patient
+        const { error: insertError } = await supabase
+          .from("patients")
+          .insert({
+            ...formData,
+            clinic_id: clinicId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+      }
 
       // Reset form and close modal
       setFormData({
@@ -123,7 +176,9 @@ export default function AddPatientModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl m-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Add New Patient</h2>
+          <h2 className="text-xl font-semibold text-gray-900">
+            {editingPatient ? 'Edit Patient' : 'Add New Patient'}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -330,7 +385,7 @@ export default function AddPatientModal({
               disabled={loading || !formData.full_name.trim()}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Adding..." : "Add Patient"}
+              {loading ? (editingPatient ? "Updating..." : "Adding...") : (editingPatient ? "Update Patient" : "Add Patient")}
             </button>
           </div>
         </form>

@@ -14,6 +14,7 @@ export default function Patients() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [selectedPatients, setSelectedPatients] = useState<number[]>([]);
+  const [editingPatient, setEditingPatient] = useState<any>(null);
 
   const fetchData = async () => {
     try {
@@ -79,6 +80,37 @@ export default function Patients() {
     } else {
       setSelectedPatients(filteredPatients.map((p) => p.id));
     }
+  };
+
+  const handleEditPatient = (patient: any) => {
+    setEditingPatient(patient);
+    setShowAddModal(true);
+  };
+
+  const handleDeletePatient = async (patientId: number) => {
+    if (!confirm("Are you sure you want to delete this patient? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('patients')
+        .delete()
+        .eq('id', patientId);
+
+      if (error) throw error;
+
+      // Refresh the list
+      fetchData();
+    } catch (error) {
+      console.error("Error deleting patient:", error);
+      alert("Failed to delete patient. They may have associated appointments or visits.");
+    }
+  };
+
+  const handleModalClose = () => {
+    setShowAddModal(false);
+    setEditingPatient(null);
   };
 
   if (loading) {
@@ -200,10 +232,18 @@ export default function Patients() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-blue-600 hover:text-blue-900">
+                        <button 
+                          onClick={() => handleEditPatient(patient)}
+                          className="text-blue-600 hover:text-blue-900 transition-colors"
+                          title="Edit patient"
+                        >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button className="text-red-600 hover:text-red-900">
+                        <button 
+                          onClick={() => handleDeletePatient(patient.id)}
+                          className="text-red-600 hover:text-red-900 transition-colors"
+                          title="Delete patient"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -218,9 +258,10 @@ export default function Patients() {
         {typeof clinicUser?.clinic_id === 'number' && (
           <AddPatientModal
             isOpen={showAddModal}
-            onClose={() => setShowAddModal(false)}
+            onClose={handleModalClose}
             onPatientAdded={handlePatientAdded}
             clinicId={clinicUser.clinic_id as number}
+            editingPatient={editingPatient}
           />
         )}
 

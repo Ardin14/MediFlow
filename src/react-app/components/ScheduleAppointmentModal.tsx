@@ -74,19 +74,32 @@ export default function ScheduleAppointmentModal({ isOpen, onClose, onAppointmen
       const appointmentDateTime = `${formData.appointment_date}T${formData.appointment_time}:00`;
 
       // Insert directly into Supabase appointments table
-      const { error } = await supabase
+      const appointmentData: any = {
+        clinic_id: clinicId,
+        patient_id: parseInt(formData.patient_id, 10),
+        doctor_id: parseInt(formData.doctor_id, 10),
+        appointment_date: appointmentDateTime,
+        status: 'booked'
+      };
+      
+      // Only add reason if it exists (column might not be in schema yet)
+      if (formData.reason) {
+        appointmentData.reason = formData.reason;
+      }
+      
+      console.log('Attempting to insert appointment:', appointmentData);
+      
+      const { data, error } = await supabase
         .from('appointments')
-        .insert({
-          clinic_id: clinicId,
-          patient_id: parseInt(formData.patient_id, 10),
-           // Store the numeric clinic_users.id to match FK expectations (avoid mixing UUID user_id)
-           doctor_id: parseInt(formData.doctor_id, 10),
-          appointment_date: appointmentDateTime,
-          reason: formData.reason || null,
-          status: 'booked'
-        });
+        .insert(appointmentData)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Appointment insert error:', error);
+        throw error;
+      }
+      
+      console.log('Appointment created successfully:', data);
 
       setFormData({ patient_id: "", doctor_id: "", appointment_date: "", appointment_time: "", reason: "" });
       onAppointmentScheduled();
