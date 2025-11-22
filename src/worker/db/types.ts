@@ -532,17 +532,8 @@ export interface Database {
         }
       }
     }
-    Views: {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      [k in never]: never
-    }
-    Functions: {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      [k in never]: never
-    }
-    Enums: {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      [k in never]: never
-    }
+    Views: {}
+    Functions: {}
+    Enums: {}
   }
 }

@@ -1,10 +1,11 @@
-/// <reference path="../types.d.ts" />
-// Editor may still complain about remote imports in a Node/TS workspace — ignore those
-// so the function file remains clean in the editor while still working at runtime.
-// @ts-ignore: remote import
+// Import ambient types (side-effect) instead of triple-slash reference per lint rule
+import '../types.d.ts';
+// Remote Deno imports; use @ts-expect-error to indicate intentional external source
+// @ts-expect-error: Remote Deno std http import not resolvable to local TS config
 import { serve } from 'https://deno.fresh.dev/std/http/server.ts';
-// @ts-ignore: remote import
-import { createClient } from 'https://esm.sh/@supabase/supabase-js';
+
+// NOTE: Currently this function only constructs an email preview. Remove supabase client import
+// until actually needed to perform DB operations to avoid unused variable lint warnings.
 
 // If the ambient Deno declaration isn't picked up by the editor, provide a fallback
 // to silence diagnostics. This does not affect runtime in the Supabase/Deno environment.
@@ -23,15 +24,8 @@ serve(async (req: Request) => {
   try {
     const { email, password, name, role } = await req.json();
 
-    // Initialize Supabase client with service role key
-    const _supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Send email using your preferred email service
-    // This is a placeholder - replace with your actual email sending logic
-    const _emailContent = `
+    // Build email content (preview) – replace with real email integration
+    const emailContent = `
       Hello ${name},
 
       You have been invited to join MediFlow as a ${role}. 
@@ -46,12 +40,11 @@ serve(async (req: Request) => {
       The MediFlow Team
     `;
 
-    // Here you would integrate with your email service provider
-    // For example, using SendGrid, Postmark, or similar
-    // await sendEmail(email, 'Welcome to MediFlow', emailContent);
+  // TODO: Integrate with email provider (e.g., SendGrid/Postmark)
+  // await sendEmail(email, 'Welcome to MediFlow', emailContent);
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, preview: emailContent }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,

@@ -36,7 +36,8 @@ export async function apiFetch<T = any>(input: string, init?: RequestInit): Prom
   try {
     data = text ? JSON.parse(text) : {};
   } catch (parseError) {
-    console.error('Failed to parse JSON response:', text);
+    // Include original error object for better debugging instead of leaving unused variable
+    console.error('Failed to parse JSON response:', { error: parseError, body: text });
     throw new Error(`Invalid JSON response: ${text.substring(0, 200)}`);
   }
 

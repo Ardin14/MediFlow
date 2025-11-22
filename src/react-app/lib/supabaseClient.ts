@@ -7,7 +7,6 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 
 if (!supabaseUrl || !supabaseAnonKey) {
   // Fail early with a helpful error during development/build so envs are added.
-  // eslint-disable-next-line no-console
   console.error('VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set. See .env.local or your hosting env vars.');
 }
 

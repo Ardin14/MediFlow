@@ -5,7 +5,6 @@ import react from "@vitejs/plugin-react";
 
 // Polyfill Web File in Node environments that lack it (e.g., Node < 20)
 // Do this BEFORE importing any plugins that might import undici/fetch internally.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const g: any = globalThis as any;
 if (typeof g.File === "undefined") {
   class NodeFile {
